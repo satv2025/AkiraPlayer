@@ -1,0 +1,621 @@
+/* ================= CUSTOM FONTS — HBOMaxSans ================= */
+@import url('https://satvplus.com.ar/css/fonts/hbomaxsans/hbomaxsans.css');
+
+
+* {
+    box-sizing: border-box;
+    font-family: "HBOMaxSans" !important;
+}
+
+.akira-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    background: #000;
+    overflow: hidden;
+    color: #fff;
+    outline: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.akira-video {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #000;
+    aspect-ratio: 16 / 9;
+}
+
+/* Gesture layer para click/doubleclick */
+.akira-gesture-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    pointer-events: none;
+}
+
+.akira-gesture-zone {
+    pointer-events: auto;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    cursor: default;
+    opacity: 0;
+}
+
+.akira-gesture-zone.center {
+    cursor: pointer;
+}
+
+/* Top overlay */
+.akira-top-overlay {
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 22px 28px 30px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    align-items: start;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, .86), rgba(0, 0, 0, .38), rgba(0, 0, 0, 0));
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+
+.akira-top-left {
+    pointer-events: auto;
+}
+
+.akira-top-meta {
+    min-width: 0;
+    pointer-events: none;
+}
+
+.akira-channel {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    opacity: .82;
+    margin-bottom: 8px;
+}
+
+.akira-title {
+    font-size: 40px;
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, .45);
+}
+
+.akira-back-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    font-size: 24px;
+    line-height: 1;
+}
+
+/* Feedback overlay */
+.akira-feedback {
+    position: absolute;
+    z-index: 7;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity .15s ease;
+    pointer-events: none;
+}
+
+.akira-feedback.show {
+    opacity: 1;
+}
+
+.akira-feedback-pill {
+    padding: 14px 18px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .78);
+    border: 1px solid rgba(255, 255, 255, .16);
+    font-size: 16px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+}
+
+/* Bottom controls */
+.akira-controls {
+    position: absolute;
+    z-index: 8;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 14px 20px 18px;
+    background: linear-gradient(to top, rgba(0, 0, 0, .90), rgba(0, 0, 0, .50), rgba(0, 0, 0, 0));
+    transition: opacity .2s ease, transform .2s ease;
+}
+
+.akira-wrap.controls-hidden .akira-controls {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+.akira-wrap.controls-hidden .akira-top-overlay {
+    opacity: 0;
+}
+
+.akira-wrap.controls-visible .akira-controls,
+.akira-wrap.controls-visible .akira-top-overlay {
+    opacity: 1;
+}
+
+/* Progress row */
+.akira-progress-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.akira-time {
+    font-size: 17px;
+    min-width: 88px;
+    text-align: center;
+    opacity: .95;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.akira-progress-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    cursor: pointer;
+}
+
+.akira-progress-visual {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 5px;
+    border-radius: 999px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.akira-progress-track,
+.akira-progress-buffered,
+.akira-progress-played {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.akira-progress-track {
+    right: 0;
+    background: rgba(255, 255, 255, .24);
+}
+
+.akira-progress-buffered {
+    width: 0%;
+    background: rgba(255, 255, 255, .40);
+}
+
+.akira-progress-played {
+    width: 0%;
+    background: #fff;
+}
+
+.akira-progress {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.akira-progress::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #fff;
+    border: 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .25);
+    opacity: 0;
+}
+
+.akira-progress-wrap:hover .akira-progress-visual {
+    height: 8px;
+}
+
+.akira-progress-wrap:hover .akira-progress::-webkit-slider-thumb {
+    opacity: 1;
+}
+
+.akira-progress::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #fff;
+    border: 0;
+    opacity: 0;
+}
+
+.akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
+    opacity: 1;
+}
+
+.akira-progress::-moz-range-track {
+    background: transparent;
+    border: 0;
+}
+
+/* Thumbnails preview */
+.akira-thumb-preview {
+    position: absolute;
+    bottom: 30px;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.akira-thumb-image {
+    width: 220px;
+    height: 124px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, .15);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.akira-thumb-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.akira-thumb-sprite {
+    background-repeat: no-repeat;
+    image-rendering: auto;
+}
+
+.akira-thumb-empty {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #191919, #0f0f0f);
+}
+
+.akira-thumb-time {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .92);
+    border: 1px solid rgba(255, 255, 255, .14);
+    color: #fff;
+}
+
+/* Toolbar layout */
+.akira-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 14px;
+}
+
+.akira-center-cluster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.akira-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Buttons */
+.akira-icon-btn,
+.akira-ghost-btn {
+    border: 0;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s ease, opacity .15s ease, transform .08s ease;
+}
+
+.akira-icon-btn:hover,
+.akira-ghost-btn:hover {
+    background: rgba(255, 255, 255, .10);
+}
+
+.akira-icon-btn:active,
+.akira-ghost-btn:active {
+    transform: scale(.97);
+}
+
+/* Tamaños GRANDES */
+.akira-icon-btn.lg {
+    width: 52px;
+    height: 52px;
+}
+
+.akira-icon-btn.xl {
+    width: 64px;
+    height: 64px;
+}
+
+.akira-icon-btn.xxl {
+    width: 82px;
+    height: 82px;
+    border-radius: 999px;
+}
+
+.akira-icon-btn.emphasized {
+    background: rgba(255, 255, 255, .14);
+}
+
+.akira-icon-btn.emphasized:hover {
+    background: rgba(255, 255, 255, .20);
+}
+
+.akira-ghost-btn {
+    width: 42px;
+    height: 42px;
+}
+
+/* 🔥 SVG en img = BLANCO TOTAL */
+.akira-icon-btn img {
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    filter: brightness(0) saturate(100%) invert(97%) sepia(0%) saturate(7488%) hue-rotate(184deg) brightness(105%) contrast(105%);
+    opacity: .98;
+}
+
+.akira-icon-btn.lg img {
+    width: 26px;
+    height: 26px;
+}
+
+.akira-icon-btn.xl img {
+    width: 32px;
+    height: 32px;
+}
+
+.akira-icon-btn.xxl img {
+    width: 38px;
+    height: 38px;
+}
+
+/* Volume */
+.akira-volume {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.akira-volume-pop {
+    position: absolute;
+    right: calc(100% + 10px);
+    bottom: 0;
+    width: 150px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(16, 16, 16, .94);
+    border: 1px solid rgba(255, 255, 255, .08);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity .15s ease, transform .15s ease;
+    backdrop-filter: blur(8px);
+}
+
+.akira-volume-pop.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.akira-volume-slider {
+    width: 100%;
+    accent-color: #fff;
+    cursor: pointer;
+}
+
+/* Menu */
+.akira-menu-wrap {
+    position: relative;
+}
+
+.akira-menu {
+    position: absolute;
+    right: 0;
+    bottom: 58px;
+    min-width: 220px;
+    max-height: 280px;
+    overflow: auto;
+    background: rgba(14, 14, 14, .96);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 14px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .38);
+    backdrop-filter: blur(8px);
+}
+
+.akira-menu-item {
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #fff;
+    text-align: left;
+    padding: 12px 12px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1.2;
+}
+
+.akira-menu-item:hover {
+    background: rgba(255, 255, 255, .08);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+    .akira-title {
+        font-size: 32px;
+    }
+
+    .akira-time {
+        font-size: 15px;
+        min-width: 78px;
+    }
+
+    .akira-thumb-image {
+        width: 190px;
+        height: 106px;
+    }
+
+    .akira-icon-btn.xxl {
+        width: 70px;
+        height: 70px;
+    }
+
+    .akira-icon-btn.xl {
+        width: 56px;
+        height: 56px;
+    }
+
+    .akira-icon-btn.lg {
+        width: 46px;
+        height: 46px;
+    }
+}
+
+@media (max-width: 780px) {
+    .akira-top-overlay {
+        padding: 14px 14px 20px;
+    }
+
+    .akira-title {
+        font-size: 22px;
+    }
+
+    .akira-channel {
+        font-size: 11px;
+        margin-bottom: 5px;
+    }
+
+    .akira-controls {
+        padding: 10px 12px 14px;
+    }
+
+    .akira-progress-row {
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .akira-time {
+        font-size: 12px;
+        min-width: 58px;
+    }
+
+    .akira-thumb-image {
+        width: 150px;
+        height: 84px;
+    }
+
+    .akira-thumb-time {
+        font-size: 11px;
+    }
+
+    .akira-toolbar {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .akira-center-cluster {
+        order: 2;
+        justify-content: center;
+    }
+
+    .akira-right {
+        order: 1;
+        justify-content: flex-end;
+    }
+
+    .akira-icon-btn.xxl {
+        width: 58px;
+        height: 58px;
+    }
+
+    .akira-icon-btn.xl {
+        width: 48px;
+        height: 48px;
+    }
+
+    .akira-icon-btn.lg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .akira-icon-btn.xxl img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .akira-icon-btn.xl img {
+        width: 24px;
+        height: 24px;
+    }
+
+    .akira-icon-btn.lg img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .akira-volume-pop {
+        width: 120px;
+    }
+
+    .akira-menu {
+        bottom: 46px;
+        min-width: 170px;
+    }
+
+    .akira-menu-item {
+        font-size: 13px;
+        padding: 10px;
+    }
+}

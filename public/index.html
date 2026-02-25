@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AkiraPlayer Preview OTT</title>
+    <link rel="stylesheet" href="/dist/akira-player.css" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        .page {
+            min-height: 100vh;
+            background: #000;
+        }
+
+        .player-shell {
+            width: 100vw;
+            max-width: 100vw;
+        }
+
+        .debug {
+            padding: 10px 12px;
+            color: #aaa;
+            font-size: 12px;
+            background: #0b0b0b;
+            border-top: 1px solid #151515;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <div class="player-shell">
+            <div id="akira"></div>
+        </div>
+        <div class="debug" id="debug"></div>
+    </div>
+
+    <script src="/dist/akira-player.umd.js"></script>
+    <script>
+        const debug = document.getElementById("debug");
+
+        try {
+            // Compat UMD
+            const api =
+                (window.AkiraPlayer && window.AkiraPlayer.mount && window.AkiraPlayer) ||
+                (window.AkiraPlayer && window.AkiraPlayer.default && window.AkiraPlayer.default.mount && window.AkiraPlayer.default);
+
+            if (!api || typeof api.mount !== "function") {
+                throw new Error("No se encontró mount() en window.AkiraPlayer");
+            }
+
+            debug.textContent = "AkiraPlayer UMD OK";
+
+            api.mount("#akira", {
+                title: "Femme Fatale",
+                channelLabel: "HBO",
+                src: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                // Opcional:
+                // poster: "https://.../poster.jpg",
+
+                // ✅ IMPORTANTE: local preview
+                assetBase: "/dist/assets",
+
+                // Continue Watching (demo)
+                contentId: "movie-femme-fatale",
+                seasonId: null,
+                episodeId: null,
+
+                // Thumbnails VTT preview (ejemplo local, lo creás abajo)
+                thumbnailsVtt: "/public/sample-thumbnails.vtt",
+
+                // Subtítulos VTT demo (si querés probá con uno real)
+                subtitles: [
+                    {
+                        src: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.vtt",
+                        srclang: "es",
+                        label: "Español"
+                    }
+                ]
+            });
+        } catch (e) {
+            console.error(e);
+            debug.textContent = "ERROR: " + (e && e.message ? e.message : String(e));
+        }
+    </script>
+</body>
+
+</html>
