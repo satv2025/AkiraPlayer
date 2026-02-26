@@ -4,8 +4,8 @@
   "description": "AkiraPlayer - Player React bundle CDN para SATV+",
   "main": "dist/akira-player.umd.js",
   "scripts": {
-    "build": "rollup -c",
-    "watch": "rollup -c -w",
+    "build": "node ./node_modules/rollup/dist/bin/rollup -c rollup.config.mjs",
+    "watch": "node ./node_modules/rollup/dist/bin/rollup -c rollup.config.mjs -w",
     "serve": "npx serve .",
     "test": "echo \"No tests yet\""
   },
