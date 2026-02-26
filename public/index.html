@@ -40,7 +40,6 @@
         <div class="player-shell">
             <div id="akira"></div>
         </div>
-        <div class="debug" id="debug"></div>
     </div>
 
     <script src="/dist/akira-player.umd.js"></script>
@@ -56,8 +55,6 @@
             if (!api || typeof api.mount !== "function") {
                 throw new Error("No se encontró mount() en window.AkiraPlayer");
             }
-
-            debug.textContent = "AkiraPlayer UMD OK";
 
             api.mount("#akira", {
                 title: "Femme Fatale",
@@ -75,12 +72,12 @@
                 episodeId: null,
 
                 // Thumbnails VTT preview (ejemplo local, lo creás abajo)
-                thumbnailsVtt: "/public/sample-thumbnails.vtt",
+                thumbnailsVtt: "https://satvplus.com.ar/remote-media/mpp-thumbnails/thumbs.vtt",
 
                 // Subtítulos VTT demo (si querés probá con uno real)
                 subtitles: [
                     {
-                        src: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.vtt",
+                        src: "https://movies.solargentinotv.com.ar/assets/media/mpp-thumbnails/thumbs.vtt",
                         srclang: "es",
                         label: "Español"
                     }

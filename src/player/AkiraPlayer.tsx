@@ -1,3 +1,4 @@
+// AkiraPlayer.tsx
 import Hls from "hls.js";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { SubtitleTrackInput } from "../index";
@@ -9,19 +10,50 @@ import {
     type ThumbnailCue
 } from "../lib/vtt-thumbnails";
 
+type RecommendedItem = {
+    id: string;
+    title: string;
+    poster?: string | null;
+    type?: "movie" | "series" | string;
+    synopsis?: string | null;
+};
+
+type EpisodeItem = {
+    id: string;
+    title: string;
+    synopsis?: string | null;
+    thumbnail?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
+    durationSeconds?: number | null;
+};
+
 type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string;
-    channelLabel?: string;
+    title?: string; // compatibilidad
+    channelLabel?: string; // compatibilidad
     assetBase?: string;
+
     contentId: string;
     seasonId?: string | null;
     episodeId?: string | null;
+
     thumbnailsVtt?: string;
-    subtitles?: SubtitleTrackInput[]; // se mantiene por compatibilidad, pero no mostramos botón CC
+    subtitles?: SubtitleTrackInput[];
+
     onBack?: () => void;
+
+    // Left actions / data
+    recommendations?: RecommendedItem[];
+    episodes?: EpisodeItem[];
+
+    onOpenRecommendations?: () => void;
+    onSelectRecommendation?: (item: RecommendedItem) => void;
+    onSelectEpisode?: (episodeId: string, episode?: EpisodeItem) => void;
+
+    recommendationsLabel?: string;
 };
 
 function fmtTime(seconds: number): string {
@@ -63,33 +95,49 @@ export function AkiraPlayer({
     poster,
     autoplay = false,
     title = "AkiraPlayer",
-    channelLabel = "SATV+",
+    channelLabel = "SATVPlus",
     assetBase = "/assets",
     contentId,
     seasonId,
     episodeId,
     thumbnailsVtt,
-    subtitles = [], // no UI de CC, pero dejamos tracks por compatibilidad futura
-    onBack
+    subtitles = [],
+    onBack,
+    recommendations = [],
+    episodes = [],
+    onOpenRecommendations,
+    onSelectRecommendation,
+    onSelectEpisode,
+    recommendationsLabel = "Te podría gustar"
 }: Props) {
+    // Compat TS estricto (no se muestran)
+    void title;
+    void channelLabel;
+
     const ICONS = useMemo(() => getIcons(assetBase), [assetBase]);
 
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const progressWrapRef = useRef<HTMLDivElement | null>(null);
+    const volumeSliderRef = useRef<HTMLInputElement | null>(null);
 
     const hlsRef = useRef<Hls | null>(null);
     const restoredRef = useRef(false);
     const lastSavedAtRef = useRef(0);
     const controlsHideTimerRef = useRef<number | null>(null);
+    const feedbackTimerRef = useRef<number | null>(null);
 
     // Playback / UI state
     const [playing, setPlaying] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [muted, setMuted] = useState(false);
     const [volume, setVolume] = useState(1);
+
     const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+
+    // Layout left panels
     const [showEpisodes, setShowEpisodes] = useState(false);
+    const [showRecommendations, setShowRecommendations] = useState(false);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -108,6 +156,8 @@ export function AkiraPlayer({
     const [hoverX, setHoverX] = useState(0);
     const [showThumbPreview, setShowThumbPreview] = useState(false);
 
+    const anyFloatingOpen = showEpisodes || showRecommendations || showVolumeSlider;
+
     // ----------------------------
     // Helpers
     // ----------------------------
@@ -123,7 +173,7 @@ export function AkiraPlayer({
         if (!playing) return;
 
         controlsHideTimerRef.current = window.setTimeout(() => {
-            if (!isPointerOverPlayer && !showEpisodes && !showVolumeSlider) {
+            if (!isPointerOverPlayer && !showEpisodes && !showVolumeSlider && !showRecommendations) {
                 setControlsVisible(false);
             }
         }, 2200);
@@ -131,9 +181,21 @@ export function AkiraPlayer({
 
     const flashFeedback = (text: string) => {
         setFeedback({ text, visible: true });
-        window.setTimeout(() => {
+
+        if (feedbackTimerRef.current) {
+            window.clearTimeout(feedbackTimerRef.current);
+            feedbackTimerRef.current = null;
+        }
+
+        feedbackTimerRef.current = window.setTimeout(() => {
             setFeedback((prev) => (prev ? { ...prev, visible: false } : prev));
         }, 700);
+    };
+
+    const closeFloatingPanels = () => {
+        setShowEpisodes(false);
+        setShowRecommendations(false);
+        setShowVolumeSlider(false);
     };
 
     // ----------------------------
@@ -249,7 +311,8 @@ export function AkiraPlayer({
             v.removeEventListener("volumechange", onVolume);
             v.removeEventListener("ended", onEnded);
         };
-    }, [autoplay, playing, isPointerOverPlayer, showEpisodes, showVolumeSlider]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoplay]);
 
     // ----------------------------
     // Fullscreen state
@@ -276,9 +339,20 @@ export function AkiraPlayer({
 
         (async () => {
             const row = await loadProgress({ contentId, seasonId, episodeId });
-            if (cancelled || !row) return;
+            if (cancelled || !row) {
+                restoredRef.current = true;
+                return;
+            }
 
-            const pos = Number(row.position_seconds || 0);
+            const pos = Number((row as any).position_seconds || 0);
+            const total = Number((row as any).duration_seconds || 0);
+            const nearEnd = total > 0 && total - pos <= (CONFIG.NEAR_END_SECONDS ?? 45);
+
+            if (nearEnd) {
+                restoredRef.current = true;
+                return;
+            }
+
             if (pos > 0 && pos < Math.max(0, duration - 3)) {
                 try {
                     v.currentTime = pos;
@@ -345,17 +419,23 @@ export function AkiraPlayer({
             });
         };
 
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "hidden") flush();
+        };
+
         v.addEventListener("pause", flush);
         window.addEventListener("beforeunload", flush);
+        document.addEventListener("visibilitychange", onVisibilityChange);
 
         return () => {
             v.removeEventListener("pause", flush);
             window.removeEventListener("beforeunload", flush);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
         };
     }, [contentId, seasonId, episodeId]);
 
     // ----------------------------
-    // Thumbnails VTT (hover preview)
+    // Thumbnails VTT (hover preview) - comportamiento como tu versión
     // ----------------------------
     useEffect(() => {
         let cancelled = false;
@@ -390,7 +470,7 @@ export function AkiraPlayer({
         const onKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement | null;
             const tag = target?.tagName?.toLowerCase();
-            if (tag === "input" || tag === "textarea") return;
+            if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
 
             const key = e.key.toLowerCase();
 
@@ -421,11 +501,53 @@ export function AkiraPlayer({
             if (key === "f") {
                 e.preventDefault();
                 void toggleFullscreen();
+                return;
+            }
+
+            if (key === "escape") {
+                closeFloatingPanels();
+                setControlsVisible(true);
             }
         };
 
         el.addEventListener("keydown", onKeyDown);
         return () => el.removeEventListener("keydown", onKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ----------------------------
+    // CSS var volume fill (WebKit dynamic gradient) - como tu versión
+    // ----------------------------
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+
+        const applyVolumeGradient = () => {
+            const current = v.muted ? 0 : v.volume;
+            const percent = Math.max(0, Math.min(100, current * 100));
+            const value = `${percent}%`;
+
+            // Lo aplicamos en wrapper e input por compat visual
+            wrapRef.current?.style.setProperty("--akira-volume-percent", value);
+            volumeSliderRef.current?.style.setProperty("--akira-volume-percent", value);
+        };
+
+        applyVolumeGradient();
+        v.addEventListener("volumechange", applyVolumeGradient);
+
+        return () => {
+            v.removeEventListener("volumechange", applyVolumeGradient);
+        };
+    }, []);
+
+    // ----------------------------
+    // Cleanup timers
+    // ----------------------------
+    useEffect(() => {
+        return () => {
+            if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
+            if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+        };
     }, []);
 
     // ----------------------------
@@ -452,6 +574,9 @@ export function AkiraPlayer({
         if (hoverTime == null || !thumbnailCues.length) return null;
         return findThumbnailCue(thumbnailCues, hoverTime);
     }, [hoverTime, thumbnailCues]);
+
+    const hasEpisodes = episodes.length > 0;
+    const hasRecommendations = recommendations.length > 0;
 
     // ----------------------------
     // Controls actions
@@ -544,6 +669,36 @@ export function AkiraPlayer({
         }
     };
 
+    const openRecommendationsPanel = () => {
+        closeFloatingPanels();
+
+        if (onOpenRecommendations) {
+            onOpenRecommendations();
+            return;
+        }
+
+        setShowRecommendations(true);
+        showControlsTemporarily();
+    };
+
+    const openEpisodesPanel = () => {
+        closeFloatingPanels();
+        setShowEpisodes(true);
+        showControlsTemporarily();
+    };
+
+    const handleEpisodeClick = (ep: EpisodeItem) => {
+        if (onSelectEpisode) onSelectEpisode(ep.id, ep);
+        setShowEpisodes(false);
+        showControlsTemporarily();
+    };
+
+    const handleRecommendationClick = (item: RecommendedItem) => {
+        if (onSelectRecommendation) onSelectRecommendation(item);
+        setShowRecommendations(false);
+        showControlsTemporarily();
+    };
+
     // ----------------------------
     // Pointer / autohide controls
     // ----------------------------
@@ -557,14 +712,14 @@ export function AkiraPlayer({
         if (playing) {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
             controlsHideTimerRef.current = window.setTimeout(() => {
-                if (!showEpisodes && !showVolumeSlider) {
+                if (!anyFloatingOpen) {
                     setControlsVisible(false);
                 }
             }, 900);
         }
     };
 
-    // Doble click seek (vibes streaming)
+    // Doble click seek
     const handleDoubleClickOverlay = (side: "left" | "right") => {
         if (side === "left") seekBy(-10);
         else seekBy(10);
@@ -591,7 +746,6 @@ export function AkiraPlayer({
                 controls={false}
                 preload="metadata"
             >
-                {/* Dejamos tracks por compatibilidad aunque no haya botón CC */}
                 {subtitles.map((t) => (
                     <track
                         key={`${t.srclang}-${t.label}`}
@@ -632,13 +786,14 @@ export function AkiraPlayer({
                 />
             </div>
 
-            {/* TOP OVERLAY */}
+            {/* TOP OVERLAY (solo botón back) */}
             <div className="akira-top-overlay">
                 <div className="akira-top-left">
                     <button
                         type="button"
                         className="akira-ghost-btn akira-back-btn"
-                        onClick={() => {
+                        onClick={(e) => {
+                            e.stopPropagation();
                             if (onBack) onBack();
                             else window.history.back();
                         }}
@@ -648,17 +803,187 @@ export function AkiraPlayer({
                         ←
                     </button>
                 </div>
-
-                <div className="akira-top-meta">
-                    <div className="akira-channel">{channelLabel}</div>
-                    <div className="akira-title">{title}</div>
-                </div>
             </div>
 
             {/* CENTER FEEDBACK */}
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-feedback-pill">{feedback?.text ?? ""}</div>
             </div>
+
+            {/* Backdrop para modales/paneles */}
+            {(showEpisodes || showRecommendations) && (
+                <div
+                    className="akira-overlay-shell"
+                    aria-hidden="true"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeFloatingPanels();
+                        showControlsTemporarily();
+                    }}
+                />
+            )}
+
+            {/* Modal Episodios */}
+            {showEpisodes && (
+                <div
+                    className="akira-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Episodios"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="akira-modal-header">
+                        <div className="akira-modal-title">
+                            Episodios {episodes.length ? `(${episodes.length})` : ""}
+                        </div>
+
+                        <button
+                            type="button"
+                            className="akira-modal-close"
+                            onClick={() => {
+                                setShowEpisodes(false);
+                                showControlsTemporarily();
+                            }}
+                            aria-label="Cerrar"
+                            title="Cerrar"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div className="akira-modal-body">
+                        {episodes.length === 0 ? (
+                            <div className="akira-empty-state">
+                                No hay episodios cargados todavía.
+                            </div>
+                        ) : (
+                            <div className="akira-episode-list">
+                                {episodes.map((ep) => {
+                                    const isCurrent = !!episodeId && ep.id === episodeId;
+                                    const epLabel =
+                                        ep.seasonNumber != null && ep.episodeNumber != null
+                                            ? `T${String(ep.seasonNumber).padStart(2, "0")} · E${String(ep.episodeNumber).padStart(2, "0")}`
+                                            : ep.episodeNumber != null
+                                                ? `E${String(ep.episodeNumber).padStart(2, "0")}`
+                                                : "Episodio";
+
+                                    return (
+                                        <button
+                                            key={ep.id}
+                                            type="button"
+                                            className={`akira-episode-card ${isCurrent ? "current" : ""}`}
+                                            onClick={() => handleEpisodeClick(ep)}
+                                            title={ep.title}
+                                        >
+                                            <div className="akira-episode-thumb">
+                                                {ep.thumbnail ? (
+                                                    <img src={ep.thumbnail} alt="" loading="lazy" />
+                                                ) : (
+                                                    <div className="akira-thumb-empty" />
+                                                )}
+                                                <span className="akira-episode-badge">{epLabel}</span>
+                                            </div>
+
+                                            <div className="akira-episode-info">
+                                                <div className="akira-episode-title-row">
+                                                    <div className="akira-episode-title">{ep.title}</div>
+                                                    {isCurrent && (
+                                                        <span className="akira-episode-current-pill">
+                                                            Reproduciendo
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {ep.synopsis && (
+                                                    <div className="akira-episode-synopsis">
+                                                        {ep.synopsis}
+                                                    </div>
+                                                )}
+
+                                                {ep.durationSeconds != null && ep.durationSeconds > 0 && (
+                                                    <div className="akira-episode-meta">
+                                                        {fmtTime(ep.durationSeconds)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Panel recomendado interno (opcional, si no usás callback externo) */}
+            {showRecommendations && !onOpenRecommendations && (
+                <div
+                    className="akira-modal akira-modal-reco"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={recommendationsLabel}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="akira-modal-header">
+                        <div className="akira-modal-title">{recommendationsLabel}</div>
+                        <button
+                            type="button"
+                            className="akira-modal-close"
+                            onClick={() => {
+                                setShowRecommendations(false);
+                                showControlsTemporarily();
+                            }}
+                            aria-label="Cerrar"
+                            title="Cerrar"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div className="akira-modal-body">
+                        {!hasRecommendations ? (
+                            <div className="akira-empty-state">
+                                No hay recomendaciones disponibles todavía.
+                            </div>
+                        ) : (
+                            <div className="akira-reco-grid">
+                                {recommendations.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        className="akira-reco-card"
+                                        onClick={() => handleRecommendationClick(item)}
+                                        title={item.title}
+                                    >
+                                        <div className="akira-reco-poster">
+                                            {item.poster ? (
+                                                <img src={item.poster} alt="" loading="lazy" />
+                                            ) : (
+                                                <div className="akira-thumb-empty" />
+                                            )}
+                                            {item.type && (
+                                                <span className="akira-reco-type">
+                                                    {item.type === "series"
+                                                        ? "Serie"
+                                                        : item.type === "movie"
+                                                            ? "Película"
+                                                            : item.type}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="akira-reco-title">{item.title}</div>
+
+                                        {item.synopsis ? (
+                                            <div className="akira-reco-synopsis">{item.synopsis}</div>
+                                        ) : null}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* BOTTOM CONTROLS */}
             <div
@@ -678,14 +1003,12 @@ export function AkiraPlayer({
                         onMouseMove={onProgressMouseMove}
                         onMouseLeave={onProgressMouseLeave}
                     >
-                        {/* Track visual custom (buffer + progress) */}
                         <div className="akira-progress-visual" aria-hidden="true">
                             <div className="akira-progress-track" />
                             <div className="akira-progress-buffered" style={{ width: `${bufferedPct}%` }} />
                             <div className="akira-progress-played" style={{ width: `${progressPct}%` }} />
                         </div>
 
-                        {/* Native input oculto visualmente, se usa para interacción */}
                         <input
                             className="akira-progress"
                             type="range"
@@ -698,7 +1021,6 @@ export function AkiraPlayer({
                             aria-label="Progreso"
                         />
 
-                        {/* Hover preview thumbnails */}
                         {showThumbPreview && hoverTime != null && (
                             <div className="akira-thumb-preview" style={{ left: hoverX }}>
                                 <div className="akira-thumb-image">
@@ -728,9 +1050,45 @@ export function AkiraPlayer({
                     <span className="akira-time">{fmtTime(duration)}</span>
                 </div>
 
-                {/* Toolbar */}
+                {/* Toolbar LEFT / CENTER / RIGHT */}
                 <div className="akira-toolbar">
-                    {/* Cluster central grande */}
+                    {/* LEFT: Te podría gustar / Episodios (texto) */}
+                    <div className="akira-left">
+                        <button
+                            type="button"
+                            className="akira-text-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openRecommendationsPanel();
+                            }}
+                            title={recommendationsLabel}
+                            aria-label={recommendationsLabel}
+                        >
+                            {recommendationsLabel}
+                            {hasRecommendations ? (
+                                <span className="akira-text-btn-count">{recommendations.length}</span>
+                            ) : null}
+                        </button>
+
+                        <button
+                            type="button"
+                            className="akira-text-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openEpisodesPanel();
+                            }}
+                            title="Episodios"
+                            aria-label="Episodios"
+                            disabled={!hasEpisodes}
+                        >
+                            Episodios
+                            {hasEpisodes ? (
+                                <span className="akira-text-btn-count">{episodes.length}</span>
+                            ) : null}
+                        </button>
+                    </div>
+
+                    {/* CENTER */}
                     <div className="akira-center-cluster">
                         <IconButton
                             onClick={() => seekBy(-10)}
@@ -755,7 +1113,7 @@ export function AkiraPlayer({
                         />
                     </div>
 
-                    {/* Derecha grande */}
+                    {/* RIGHT: Volume / Fullscreen */}
                     <div className="akira-right">
                         <div
                             className="akira-volume"
@@ -774,43 +1132,18 @@ export function AkiraPlayer({
 
                             <div className={`akira-volume-pop ${showVolumeSlider ? "show" : ""}`}>
                                 <input
+                                    ref={volumeSliderRef}
                                     className="akira-volume-slider"
                                     type="range"
                                     min={0}
                                     max={1}
                                     step={0.01}
                                     value={muted ? 0 : volume}
+                                    onInput={(e) => onVolumeInput(Number((e.target as HTMLInputElement).value))}
                                     onChange={(e) => onVolumeInput(Number(e.target.value))}
                                     aria-label="Volumen"
                                 />
                             </div>
-                        </div>
-
-                        {/* Episodes placeholder */}
-                        <div className="akira-menu-wrap">
-                            <IconButton
-                                onClick={() => {
-                                    setShowEpisodes((v) => !v);
-                                    showControlsTemporarily();
-                                }}
-                                icon={ICONS.episodes}
-                                label="Episodios"
-                                size="lg"
-                            />
-
-                            {showEpisodes && (
-                                <div className="akira-menu">
-                                    <button type="button" className="akira-menu-item" onClick={() => setShowEpisodes(false)}>
-                                        Episodio 1
-                                    </button>
-                                    <button type="button" className="akira-menu-item" onClick={() => setShowEpisodes(false)}>
-                                        Episodio 2
-                                    </button>
-                                    <button type="button" className="akira-menu-item" onClick={() => setShowEpisodes(false)}>
-                                        Episodio 3
-                                    </button>
-                                </div>
-                            )}
                         </div>
 
                         <IconButton
@@ -832,6 +1165,7 @@ type IconButtonProps = {
     label: string;
     size?: "lg" | "xl" | "xxl";
     emphasized?: boolean;
+    disabled?: boolean;
 };
 
 function IconButton({
@@ -839,7 +1173,8 @@ function IconButton({
     icon,
     label,
     size = "lg",
-    emphasized = false
+    emphasized = false,
+    disabled = false
 }: IconButtonProps) {
     return (
         <button
@@ -848,6 +1183,7 @@ function IconButton({
             onClick={onClick}
             aria-label={label}
             title={label}
+            disabled={disabled}
         >
             <img src={icon} alt="" />
         </button>

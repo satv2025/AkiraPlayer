@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:ns1="http://www.bohemiancoding.com/sketch/ns" width="1280" height="1280" viewBox="-4 0 28 28" version="1.1" preserveAspectRatio="xMidYMid meet">
     
-    <title>pauze</title>
+    <g transform="translate(10 14) scale(0.75) translate(-10 -14)"><title>pauze</title>
     <desc>Created with Sketch Beta.</desc>
     <defs>
 
@@ -13,4 +13,4 @@
 </path>
         </g>
     </g>
-</svg>
+</g></svg>
