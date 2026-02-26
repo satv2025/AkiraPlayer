@@ -34,7 +34,12 @@ type Props = {
     autoplay?: boolean;
     title?: string; // compatibilidad
     channelLabel?: string; // compatibilidad
+
+    /** Base de assets (compat actual) */
     assetBase?: string;
+
+    /** Alias opcional para usar desde embeds/watch.html */
+    assetBaseUrl?: string;
 
     contentId: string;
     seasonId?: string | null;
@@ -70,7 +75,8 @@ function fmtTime(seconds: number): string {
 }
 
 function getIcons(assetBase: string) {
-    const base = `${assetBase.replace(/\/$/, "")}/media/icons/svg`;
+    const safeAssetBase = (assetBase || "/assets").replace(/\/$/, "");
+    const base = `${safeAssetBase}/media/icons/svg`;
     return {
         play: `${base}/play.svg`,
         pause: `${base}/pause.svg`,
@@ -97,6 +103,7 @@ export function AkiraPlayer({
     title = "AkiraPlayer",
     channelLabel = "SATVPlus",
     assetBase = "/assets",
+    assetBaseUrl,
     contentId,
     seasonId,
     episodeId,
@@ -114,7 +121,10 @@ export function AkiraPlayer({
     void title;
     void channelLabel;
 
-    const ICONS = useMemo(() => getIcons(assetBase), [assetBase]);
+    // ✅ Prioridad: assetBaseUrl > assetBase > "/assets"
+    const resolvedAssetBase = (assetBaseUrl || assetBase || "/assets").replace(/\/$/, "");
+
+    const ICONS = useMemo(() => getIcons(resolvedAssetBase), [resolvedAssetBase]);
 
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -435,7 +445,7 @@ export function AkiraPlayer({
     }, [contentId, seasonId, episodeId]);
 
     // ----------------------------
-    // Thumbnails VTT (hover preview) - comportamiento como tu versión
+    // Thumbnails VTT (hover preview)
     // ----------------------------
     useEffect(() => {
         let cancelled = false;
@@ -461,7 +471,7 @@ export function AkiraPlayer({
     }, [thumbnailsVtt]);
 
     // ----------------------------
-    // Keyboard shortcuts (sin speed / sin cc)
+    // Keyboard shortcuts
     // ----------------------------
     useEffect(() => {
         const el = wrapRef.current;
@@ -516,7 +526,7 @@ export function AkiraPlayer({
     }, []);
 
     // ----------------------------
-    // CSS var volume fill (WebKit dynamic gradient) - como tu versión
+    // CSS var volume fill (WebKit dynamic gradient)
     // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
@@ -527,7 +537,6 @@ export function AkiraPlayer({
             const percent = Math.max(0, Math.min(100, current * 100));
             const value = `${percent}%`;
 
-            // Lo aplicamos en wrapper e input por compat visual
             wrapRef.current?.style.setProperty("--akira-volume-percent", value);
             volumeSliderRef.current?.style.setProperty("--akira-volume-percent", value);
         };
