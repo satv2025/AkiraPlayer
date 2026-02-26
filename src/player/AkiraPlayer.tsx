@@ -1112,6 +1112,8 @@ export function AkiraPlayer({
                             label={playing ? "Pause" : "Play"}
                             size="xxl"
                             emphasized
+                            className="playPauseBtn"
+                            imgClassName={!playing ? "playSVG" : ""}
                         />
 
                         <IconButton
@@ -1175,6 +1177,8 @@ type IconButtonProps = {
     size?: "lg" | "xl" | "xxl";
     emphasized?: boolean;
     disabled?: boolean;
+    className?: string;
+    imgClassName?: string;
 };
 
 function IconButton({
@@ -1183,18 +1187,20 @@ function IconButton({
     label,
     size = "lg",
     emphasized = false,
-    disabled = false
+    disabled = false,
+    className = "",
+    imgClassName = ""
 }: IconButtonProps) {
     return (
         <button
             type="button"
-            className={`akira-icon-btn ${size} ${emphasized ? "emphasized" : ""}`}
+            className={`akira-icon-btn ${size} ${emphasized ? "emphasized" : ""} ${className}`.trim()}
             onClick={onClick}
             aria-label={label}
             title={label}
             disabled={disabled}
         >
-            <img src={icon} alt="" />
+            <img src={icon} alt="" className={imgClassName} />
         </button>
     );
 }
