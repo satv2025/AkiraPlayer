@@ -94,6 +94,24 @@ function getIcons(assetBase: string) {
     };
 }
 
+/**
+ * Detecta Safari/iOS para permitir HLS nativo.
+ * Evita falsos positivos de Chrome/Chromium con canPlayType('application/vnd.apple.mpegurl')
+ */
+function isSafariLikeForNativeHls(): boolean {
+    const ua = navigator.userAgent || "";
+    const vendor = navigator.vendor || "";
+
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    const isSafariDesktop =
+        /Safari/i.test(ua) &&
+        !/Chrome|Chromium|Edg|OPR|CriOS|FxiOS|Android/i.test(ua) &&
+        /Apple/i.test(vendor);
+
+    return isIOS || isSafariDesktop;
+}
+
 type FeedbackState = { text: string; visible: boolean } | null;
 
 export function AkiraPlayer({
@@ -210,6 +228,7 @@ export function AkiraPlayer({
 
     // ----------------------------
     // HLS setup (.m3u8)
+    // ✅ FIX: preferir Hls.js antes que HLS nativo
     // ----------------------------
     useEffect(() => {
         const video = videoRef.current;
@@ -217,37 +236,125 @@ export function AkiraPlayer({
 
         restoredRef.current = false;
 
+        // destruir instancia HLS previa
         if (hlsRef.current) {
-            hlsRef.current.destroy();
+            try {
+                hlsRef.current.destroy();
+            } catch {
+                // noop
+            }
             hlsRef.current = null;
         }
 
-        // Safari / iOS con HLS nativo
-        if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = src;
-        } else if (Hls.isSupported()) {
+        // resetear video para evitar estados colgados entre cambios de src
+        try {
+            video.pause();
+        } catch {
+            // noop
+        }
+
+        try {
+            video.removeAttribute("src");
+            video.load();
+        } catch {
+            // noop
+        }
+
+        const nativeHlsCanPlay = !!video.canPlayType("application/vnd.apple.mpegurl");
+        const hlsJsSupported =
+            typeof Hls !== "undefined" &&
+            !!Hls &&
+            typeof Hls.isSupported === "function" &&
+            Hls.isSupported();
+
+        console.log("[AkiraPlayer][HLS setup]", {
+            src,
+            nativeHlsCanPlay,
+            hlsJsSupported,
+            safariLikeNative: isSafariLikeForNativeHls(),
+            hlsType: typeof Hls
+        });
+
+        // ✅ 1) PRIORIDAD: Hls.js (Chrome/Edge/Firefox, y en general desktop)
+        if (hlsJsSupported) {
             const hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: true
             });
 
+            hlsRef.current = hls;
+
+            hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+                console.log("[AkiraPlayer][HLS] MEDIA_ATTACHED");
+            });
+
+            hls.on(Hls.Events.MANIFEST_LOADING, (_evt, data) => {
+                console.log("[AkiraPlayer][HLS] MANIFEST_LOADING", data);
+            });
+
+            hls.on(Hls.Events.MANIFEST_PARSED, (_evt, data) => {
+                console.log("[AkiraPlayer][HLS] MANIFEST_PARSED", {
+                    levels: data?.levels?.length,
+                    firstLevel: (data as any)?.firstLevel ?? null
+                });
+            });
+
             hls.on(Hls.Events.ERROR, (_evt, data) => {
-                console.warn("[AkiraPlayer][HLS] error:", data);
+                console.error("[AkiraPlayer][HLS] ERROR", {
+                    type: data?.type,
+                    details: data?.details,
+                    fatal: data?.fatal,
+                    response: data?.response
+                        ? {
+                            code: data.response.code,
+                            text: data.response.text,
+                            url: data.response.url
+                        }
+                        : null,
+                    reason: (data as any)?.reason || null
+                });
             });
 
             hls.loadSource(src);
             hls.attachMedia(video);
-            hlsRef.current = hls;
-        } else {
-            console.warn("[AkiraPlayer] HLS no soportado en este navegador");
+        }
+        // ✅ 2) HLS nativo solo en Safari/iOS reales
+        else if (nativeHlsCanPlay && isSafariLikeForNativeHls()) {
+            console.log("[AkiraPlayer][HLS] usando HLS nativo (Safari/iOS)");
+            video.src = src;
+            video.load();
+        }
+        // ❌ 3) Sin soporte HLS
+        else {
+            console.warn("[AkiraPlayer] HLS no soportado en este navegador", {
+                nativeHlsCanPlay,
+                hlsJsSupported,
+                safariLikeNative: isSafariLikeForNativeHls()
+            });
         }
 
         return () => {
-            if (hlsRef.current) {
-                hlsRef.current.destroy();
-                hlsRef.current = null;
+            try {
+                if (hlsRef.current) {
+                    hlsRef.current.destroy();
+                    hlsRef.current = null;
+                }
+            } catch {
+                // noop
             }
-            video.removeAttribute("src");
+
+            try {
+                video.pause();
+            } catch {
+                // noop
+            }
+
+            try {
+                video.removeAttribute("src");
+                video.load();
+            } catch {
+                // noop
+            }
         };
     }, [src]);
 
@@ -294,6 +401,21 @@ export function AkiraPlayer({
             flashFeedback("Finalizado");
         };
 
+        const onError = () => {
+            const err = v.error;
+            console.error("[AkiraPlayer][video] error", {
+                currentSrc: v.currentSrc,
+                networkState: v.networkState,
+                readyState: v.readyState,
+                mediaError: err
+                    ? {
+                        code: err.code,
+                        message: err.message || null
+                    }
+                    : null
+            });
+        };
+
         v.addEventListener("play", onPlay);
         v.addEventListener("pause", onPause);
         v.addEventListener("timeupdate", onTime);
@@ -302,6 +424,7 @@ export function AkiraPlayer({
         v.addEventListener("durationchange", onMeta);
         v.addEventListener("volumechange", onVolume);
         v.addEventListener("ended", onEnded);
+        v.addEventListener("error", onError);
 
         v.volume = 1;
 
@@ -320,6 +443,7 @@ export function AkiraPlayer({
             v.removeEventListener("durationchange", onMeta);
             v.removeEventListener("volumechange", onVolume);
             v.removeEventListener("ended", onEnded);
+            v.removeEventListener("error", onError);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoplay]);
@@ -597,7 +721,7 @@ export function AkiraPlayer({
         showControlsTemporarily();
 
         if (v.paused) {
-            v.play().catch(() => { });
+            v.play().catch(() => { /* noop */ });
             flashFeedback("Play");
         } else {
             v.pause();
@@ -754,6 +878,7 @@ export function AkiraPlayer({
                 playsInline
                 controls={false}
                 preload="metadata"
+                crossOrigin="anonymous"
             >
                 {subtitles.map((t) => (
                     <track
