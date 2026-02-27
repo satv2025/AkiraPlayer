@@ -471,7 +471,7 @@
 }
 
 .akira-progress-visual {
-    height: 3.6px;
+    height: 4.3px;
     left: calc(var(--akira-progress-bleed)*-1);
     overflow: hidden;
     pointer-events: none;

@@ -69,6 +69,9 @@ type Props = {
     onSelectEpisode?: (episodeId: string, episode?: EpisodeItem) => void;
 
     recommendationsLabel?: string;
+
+    /** ✅ Playlist mode: al terminar, reproduce el siguiente episodio */
+    playlistMode?: boolean;
 };
 
 type EpisodeProgressInfo = {
@@ -374,7 +377,8 @@ export function AkiraPlayer({
     onOpenRecommendations,
     onSelectRecommendation,
     onSelectEpisode,
-    recommendationsLabel = "Te podría gustar"
+    recommendationsLabel = "Te podría gustar",
+    playlistMode = true
 }: Props) {
     void channelLabel;
 
@@ -392,6 +396,9 @@ export function AkiraPlayer({
     const lastSavedAtRef = useRef(0);
     const controlsHideTimerRef = useRef<number | null>(null);
     const feedbackTimerRef = useRef<number | null>(null);
+
+    /** ✅ Para forzar autoplay cuando avanza al siguiente episodio en playlist mode */
+    const playlistNextAutoplayRef = useRef(false);
 
     const [playing, setPlaying] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -519,6 +526,34 @@ export function AkiraPlayer({
         if (epTitle) return epTitle;
         return "";
     }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
+
+    /**
+     * ✅ Playlist mode helpers (deben estar ANTES del useEffect de Video events)
+     * para evitar TS2448/TS2454: "usada antes de su declaración"
+     */
+    const orderedEpisodes = useMemo(() => {
+        return [...episodes].sort((a, b) => {
+            const sa = a.seasonNumber ?? 1;
+            const sb = b.seasonNumber ?? 1;
+            if (sa !== sb) return sa - sb;
+
+            const ea = a.episodeNumber ?? 0;
+            const eb = b.episodeNumber ?? 0;
+            if (ea !== eb) return ea - eb;
+
+            return String(a.id).localeCompare(String(b.id));
+        });
+    }, [episodes]);
+
+    const currentEpisodeIndexInPlaylist = useMemo(() => {
+        if (!episodeId) return -1;
+        return orderedEpisodes.findIndex((ep) => ep.id === episodeId);
+    }, [orderedEpisodes, episodeId]);
+
+    const nextEpisodeInPlaylist = useMemo(() => {
+        if (currentEpisodeIndexInPlaylist < 0) return null;
+        return orderedEpisodes[currentEpisodeIndexInPlaylist + 1] ?? null;
+    }, [orderedEpisodes, currentEpisodeIndexInPlaylist]);
 
     const goBackToOpenedTitle = () => {
         if (onBack) {
@@ -725,7 +760,17 @@ export function AkiraPlayer({
             }
         };
 
-        const onMeta = () => setDuration(v.duration || 0);
+        const onMeta = () => {
+            setDuration(v.duration || 0);
+
+            // ✅ autoplay inicial o forzado por playlist mode
+            if (autoplay || playlistNextAutoplayRef.current) {
+                v.play().catch(() => {
+                    // noop
+                });
+                playlistNextAutoplayRef.current = false;
+            }
+        };
 
         const onVolume = () => {
             setMuted(v.muted);
@@ -735,6 +780,20 @@ export function AkiraPlayer({
         const onEnded = () => {
             setPlaying(false);
             setControlsVisible(true);
+
+            // ✅ Playlist mode: avanzar automáticamente al siguiente episodio
+            if (
+                playlistMode &&
+                isSeriesContext &&
+                nextEpisodeInPlaylist &&
+                onSelectEpisode
+            ) {
+                playlistNextAutoplayRef.current = true;
+                flashFeedback("Siguiente episodio");
+                onSelectEpisode(nextEpisodeInPlaylist.id, nextEpisodeInPlaylist);
+                return;
+            }
+
             flashFeedback("Finalizado");
         };
 
@@ -777,8 +836,7 @@ export function AkiraPlayer({
             v.removeEventListener("ended", onEnded);
             v.removeEventListener("error", onError);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoplay]);
+    }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode]);
 
     // Fullscreen state
     useEffect(() => {
@@ -1086,22 +1144,24 @@ export function AkiraPlayer({
     }, []);
 
     // Derived
-const volumeIcon = useMemo(() => {
-    // Si está muteado explícitamente -> mute
-    if (muted) return ICONS.volume.mute;
+    const volumeIcon = useMemo(() => {
+        // mute explícito
+        if (muted) return ICONS.volume.mute;
 
-    // Slider en 0% -> mute
-    if (volume <= 0) return ICONS.volume.mute;
+        const pct = Math.round((volume || 0) * 100);
 
-    // Muy bajito (ej. 2% a 5%) -> vol0
-    if (volume <= 0.05) return ICONS.volume.vol0;
+        // 0% -> mute
+        if (pct <= 0) return ICONS.volume.mute;
 
-    // Medio -> vol1
-    if (volume <= 0.5) return ICONS.volume.vol1;
+        // 1% a 30% -> vol0
+        if (pct <= 30) return ICONS.volume.vol0;
 
-    // Alto -> vol2
-    return ICONS.volume.vol2;
-}, [ICONS, muted, volume]);
+        // 31% a 74% -> vol1
+        if (pct < 75) return ICONS.volume.vol1;
+
+        // 75% a 100% -> vol2
+        return ICONS.volume.vol2;
+    }, [ICONS, muted, volume]);
 
     const progressPct = useMemo(() => {
         if (!duration || !Number.isFinite(duration)) return 0;
@@ -1196,18 +1256,20 @@ const volumeIcon = useMemo(() => {
         showControlsTemporarily();
     };
 
-const onVolumeInput = (value: number) => {
-    const v = videoRef.current;
-    if (!v) return;
+    const onVolumeInput = (value: number) => {
+        const v = videoRef.current;
+        if (!v) return;
 
-    v.volume = value;
+        const safeValue = clamp(value, 0, 1);
 
-    // Consistencia: 0 => mute, >0 => unmute
-    v.muted = value <= 0;
+        v.volume = safeValue;
 
-    flashFeedback(`Vol ${Math.round(value * 100)}%`);
-    showControlsTemporarily();
-};
+        // ✅ Consistencia: slider en 0 => mute real
+        v.muted = safeValue <= 0;
+
+        flashFeedback(`Vol ${Math.round(safeValue * 100)}%`);
+        showControlsTemporarily();
+    };
 
     const toggleFullscreen = async () => {
         const el = wrapRef.current;
