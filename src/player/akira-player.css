@@ -869,7 +869,6 @@ img.playSVG {
 
 .akira-volume-slider::-webkit-slider-runnable-track {
     background: linear-gradient(#fff,#fff) 0 0 /var(--akira-volume-percent) 100% no-repeat,hsla(0,0%,100%,.24);
-    border-radius: 999px;
     height: 5px
 }
 
@@ -889,14 +888,12 @@ img.playSVG {
 .akira-volume-slider::-moz-range-track {
     background: hsla(0,0%,100%,.24);
     border: 0;
-    border-radius: 999px;
     height: 5px
 }
 
 .akira-volume-slider::-moz-range-progress {
     background: #fff;
     border: 0;
-    border-radius: 999px;
     height: 5px
 }
 

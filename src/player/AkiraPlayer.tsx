@@ -1,6 +1,13 @@
 // AkiraPlayer.tsx
 import Hls from "hls.js";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
 import type { SubtitleTrackInput } from "../index";
 import { CONFIG } from "../config";
 import { supabase } from "../lib/supabase";
@@ -46,13 +53,13 @@ type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string;
+    title?: string; // puede venir mal (ej. "Episodio 2"), se hidrata desde movies por contentId
     channelLabel?: string;
 
     assetBase?: string;
     assetBaseUrl?: string;
 
-    contentId: string;
+    contentId: string; // UUID de movies.id
     seasonId?: string | null;
     episodeId?: string | null;
 
@@ -69,6 +76,8 @@ type Props = {
     onSelectEpisode?: (episodeId: string, episode?: EpisodeItem) => void;
 
     recommendationsLabel?: string;
+
+    /** ✅ Playlist mode: al terminar, reproduce el siguiente episodio */
     playlistMode?: boolean;
 };
 
@@ -423,6 +432,7 @@ async function loadEpisodeThumbsFromSupabase(params: {
     return result;
 }
 
+/** ✅ Título real de la serie/película desde public.movies por UUID */
 async function loadContentTitleFromMovies(params: {
     contentId: string;
 }): Promise<{ title: string | null; category: string | null }> {
@@ -496,17 +506,20 @@ export function AkiraPlayer({
     const controlsHideTimerRef = useRef<number | null>(null);
     const feedbackTimerRef = useRef<number | null>(null);
 
-    /** Handshake con watch.html/watch.js */
+    /** ✅ Handshake con watch.html/watch.js */
     const handshakePreparingSentKeyRef = useRef<string>("");
     const handshakeReadySentKeyRef = useRef<string>("");
     const handshakeReadyRafRef = useRef<number | null>(null);
     const mediaReadyProbeTimerRef = useRef<number | null>(null);
-    const autoplayRetryTimerRef = useRef<number | null>(null);
 
-    /** Playlist next autoplay */
+    /** ✅ Autoplay retries */
+    const autoplayRetryTimerRef = useRef<number | null>(null);
+    const autoplayFinalRetryTimerRef = useRef<number | null>(null);
+
+    /** ✅ Para forzar autoplay cuando avanza al siguiente episodio en playlist mode */
     const playlistNextAutoplayRef = useRef(false);
 
-    /** Hidratación modal episodios */
+    /** ✅ Evita races y duplicados al hidratar modal */
     const episodesModalHydrationSeqRef = useRef(0);
     const episodesModalHydratedSignatureRef = useRef<string>("");
 
@@ -527,14 +540,17 @@ export function AkiraPlayer({
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
     const [isEpisodesModalPreparing, setIsEpisodesModalPreparing] = useState(false);
 
-    /** Boot gate */
+    /** ✅ Boot gate: primero data, después reproducción */
     const [isPlayerBootPreparing, setIsPlayerBootPreparing] = useState(true);
     const [isPlayerBootReady, setIsPlayerBootReady] = useState(false);
 
-    /** Handshake real de reproducción (video listo) */
+    /** ✅ Media ready real (video con source + metadata) */
     const [isMediaHandshakeReady, setIsMediaHandshakeReady] = useState(false);
 
-    /** Título/categoría reales */
+    /** ✅ Confirmación de que el overlay de "Preparando reproducción..." ya desapareció del DOM */
+    const [isPreparingOverlayGoneCommitted, setIsPreparingOverlayGoneCommitted] = useState(false);
+
+    /** ✅ título/categoría reales desde movies */
     const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
     const [contentCategoryFromDb, setContentCategoryFromDb] = useState<string | null>(null);
 
@@ -642,6 +658,9 @@ export function AkiraPlayer({
         return "";
     }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
 
+    /**
+     * ✅ Playlist helpers ANTES del useEffect de video
+     */
     const orderedEpisodes = useMemo(() => {
         return [...episodes].sort((a, b) => {
             const sa = a.seasonNumber ?? 1;
@@ -666,10 +685,12 @@ export function AkiraPlayer({
         return orderedEpisodes[currentEpisodeIndexInPlaylist + 1] ?? null;
     }, [orderedEpisodes, currentEpisodeIndexInPlaylist]);
 
+    /** ✅ Season efectivo para progresos del episodio actual */
     const effectiveSeasonIdForCurrentEpisode = useMemo(() => {
         return currentEpisodeData?.seasonId ?? seasonId ?? null;
     }, [currentEpisodeData, seasonId]);
 
+    /** ✅ Firma para saber si ya hidratamos el modal con este set de episodios */
     const episodesModalDataSignature = useMemo(() => {
         const compact = episodes.map((ep) => [
             String(ep.id),
@@ -686,6 +707,7 @@ export function AkiraPlayer({
         });
     }, [contentId, seasonId, episodes]);
 
+    /** ✅ Firma de handshake alineada con watch.html */
     const playbackHandshakeKey = useMemo(() => {
         return JSON.stringify({
             contentId: String(contentId || ""),
@@ -693,6 +715,8 @@ export function AkiraPlayer({
             src: String(src || "")
         });
     }, [contentId, episodeId, src]);
+
+    const isPreparingUiVisible = !isPlayerBootReady || !isMediaHandshakeReady;
 
     const hydrateEpisodesModalData = useCallback(
         async (opts?: { force?: boolean; silent?: boolean }) => {
@@ -785,25 +809,34 @@ export function AkiraPlayer({
         }
     };
 
-    // Reset del handshake de media cuando cambia reproducción
+    // ✅ Reset handshake cuando cambia reproducción
     useEffect(() => {
         setIsMediaHandshakeReady(false);
+        setIsPreparingOverlayGoneCommitted(false);
 
         if (mediaReadyProbeTimerRef.current) {
             window.clearTimeout(mediaReadyProbeTimerRef.current);
             mediaReadyProbeTimerRef.current = null;
         }
-
         if (handshakeReadyRafRef.current) {
             window.cancelAnimationFrame(handshakeReadyRafRef.current);
             handshakeReadyRafRef.current = null;
         }
+        if (autoplayRetryTimerRef.current) {
+            window.clearTimeout(autoplayRetryTimerRef.current);
+            autoplayRetryTimerRef.current = null;
+        }
+        if (autoplayFinalRetryTimerRef.current) {
+            window.clearTimeout(autoplayFinalRetryTimerRef.current);
+            autoplayFinalRetryTimerRef.current = null;
+        }
     }, [playbackHandshakeKey]);
 
-    // Detector real de "video listo" (source + metadata)
+    // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+
         if (!isPlayerBootReady) return;
         if (!src) return;
 
@@ -850,6 +883,7 @@ export function AkiraPlayer({
             });
         };
 
+        // chequeo inmediato + micro delay (Hls attach/load puede completar justo después)
         markReadyIfApplies("effect-start");
         mediaReadyProbeTimerRef.current = window.setTimeout(() => {
             markReadyIfApplies("effect-probe-t+80ms");
@@ -881,8 +915,40 @@ export function AkiraPlayer({
         };
     }, [isPlayerBootReady, src, contentId, episodeId, playbackHandshakeKey]);
 
-    // Evento custom para handshake con watch.html/watch.js
-    // READY SOLO cuando boot+media OK y overlay "Preparando reproducción..." ya no está en DOM.
+    // ✅ Confirmar en DOM que el overlay "Preparando reproducción..." realmente desapareció (commit + RAF)
+    useLayoutEffect(() => {
+        let cancelled = false;
+        let rafId: number | null = null;
+
+        // Mientras el UI de preparación deba estar visible, este flag debe ser false
+        if (isPreparingUiVisible) {
+            setIsPreparingOverlayGoneCommitted(false);
+            return;
+        }
+
+        // Esperar al commit del DOM + 1 frame para evitar carrera con watch.html
+        rafId = window.requestAnimationFrame(() => {
+            if (cancelled) return;
+            const stillVisible = isPreparingOverlayVisibleInDom();
+            if (!stillVisible) {
+                setIsPreparingOverlayGoneCommitted(true);
+            } else {
+                // Reintento corto por si hay un frame extra
+                rafId = window.requestAnimationFrame(() => {
+                    if (cancelled) return;
+                    setIsPreparingOverlayGoneCommitted(!isPreparingOverlayVisibleInDom());
+                });
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            if (rafId != null) window.cancelAnimationFrame(rafId);
+        };
+    }, [isPreparingUiVisible, isPreparingOverlayVisibleInDom, playbackHandshakeKey]);
+
+    // ✅ Evento custom para handshake con watch.html/watch.js
+    // READY SOLO cuando boot + media + overlay removido del DOM
     useEffect(() => {
         if (typeof window === "undefined") return;
 
@@ -904,6 +970,7 @@ export function AkiraPlayer({
                 bootReady: isPlayerBootReady,
                 mediaReady: isMediaHandshakeReady,
                 overlayPreparingVisible: isPreparingOverlayVisibleInDom(),
+                overlayGoneCommitted: isPreparingOverlayGoneCommitted,
                 video: v
                     ? {
                           currentSrc: v.currentSrc || null,
@@ -955,13 +1022,19 @@ export function AkiraPlayer({
             }
         };
 
-        const waitUntilOverlayGoneThenEmitReady = (attempt = 0) => {
+        const waitUntilTrulyReadyThenEmit = (attempt = 0) => {
             if (cancelled) return;
 
             const v = videoRef.current;
             const videoReady = isVideoElementPlaybackReady(v);
             const overlayVisible = isPreparingOverlayVisibleInDom();
-            const shouldBeReady = isPlayerBootReady && isMediaHandshakeReady && videoReady && !overlayVisible;
+
+            const shouldBeReady =
+                isPlayerBootReady &&
+                isMediaHandshakeReady &&
+                isPreparingOverlayGoneCommitted &&
+                videoReady &&
+                !overlayVisible;
 
             if (shouldBeReady) {
                 emitReady();
@@ -971,11 +1044,12 @@ export function AkiraPlayer({
             emitPreparing();
 
             if (attempt > 300) {
-                console.warn("[AkiraPlayer][handshake] overlay/media no terminó a tiempo para READY", {
+                console.warn("[AkiraPlayer][handshake] no llegó a estado READY completo", {
                     attempt,
                     isPlayerBootPreparing,
                     isPlayerBootReady,
                     isMediaHandshakeReady,
+                    isPreparingOverlayGoneCommitted,
                     videoReady,
                     overlayVisible
                 });
@@ -983,15 +1057,18 @@ export function AkiraPlayer({
             }
 
             handshakeReadyRafRef.current = window.requestAnimationFrame(() => {
-                waitUntilOverlayGoneThenEmitReady(attempt + 1);
+                waitUntilTrulyReadyThenEmit(attempt + 1);
             });
         };
 
-        if (!isPlayerBootReady || !isMediaHandshakeReady) {
+        const candidateReady =
+            isPlayerBootReady && isMediaHandshakeReady && isPreparingOverlayGoneCommitted;
+
+        if (!candidateReady) {
             emitPreparing();
         } else {
             handshakeReadyRafRef.current = window.requestAnimationFrame(() => {
-                waitUntilOverlayGoneThenEmitReady(0);
+                waitUntilTrulyReadyThenEmit(0);
             });
         }
 
@@ -1006,6 +1083,7 @@ export function AkiraPlayer({
         isPlayerBootPreparing,
         isPlayerBootReady,
         isMediaHandshakeReady,
+        isPreparingOverlayGoneCommitted,
         contentId,
         episodeId,
         src,
@@ -1013,7 +1091,7 @@ export function AkiraPlayer({
         isPreparingOverlayVisibleInDom
     ]);
 
-    // BOOT SEQUENCE: primero data, después reproducción
+    // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
 
@@ -1021,9 +1099,11 @@ export function AkiraPlayer({
             setIsPlayerBootPreparing(true);
             setIsPlayerBootReady(false);
 
+            // al cambiar contenido, forzamos nuevo restore del episodio
             restoredRef.current = false;
 
             try {
+                // 1) título/categoría real
                 if (!contentId) {
                     if (!cancelled) {
                         setContentTitleFromDb(null);
@@ -1037,6 +1117,7 @@ export function AkiraPlayer({
                     }
                 }
 
+                // 2) hidratar data del modal ANTES de iniciar HLS/video
                 await hydrateEpisodesModalData({ force: true, silent: true });
             } catch (e) {
                 console.warn("[AkiraPlayer] Boot inicial falló:", e);
@@ -1208,6 +1289,7 @@ export function AkiraPlayer({
         const onMeta = () => {
             setDuration(v.duration || 0);
 
+            // Primer intento de autoplay (puede fallar si el navegador lo bloquea)
             if (autoplay || playlistNextAutoplayRef.current) {
                 v.play().catch((e) => {
                     console.warn("[AkiraPlayer][autoplay] onMeta bloqueado/no disponible:", e);
@@ -1281,49 +1363,84 @@ export function AkiraPlayer({
         };
     }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode, isPlayerBootReady]);
 
-    // ✅ Autoplay reforzado post-handshake (después de que desaparece el overlay)
+    // ✅ Autoplay reforzado POST-handshake (cuando ya desapareció "Preparando reproducción")
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
-        if (!isPlayerBootReady || !isMediaHandshakeReady) return;
 
         const shouldAutoplay = autoplay || playlistNextAutoplayRef.current;
         if (!shouldAutoplay) return;
 
-        const tryPlay = (reason: string) => {
+        const fullyReady =
+            isPlayerBootReady &&
+            isMediaHandshakeReady &&
+            isPreparingOverlayGoneCommitted;
+
+        if (!fullyReady) return;
+
+        let cancelled = false;
+
+        const tryPlayRobust = async (reason: string) => {
+            if (cancelled) return;
+            if (!v.paused && !v.ended) return;
+
             try {
-                const p = v.play();
-                if (p && typeof p.catch === "function") {
-                    p.catch((e) => {
-                        console.warn("[AkiraPlayer][autoplay] post-handshake bloqueado/no disponible:", {
-                            reason,
-                            error: e?.message || e
-                        });
-                    });
-                } else {
-                    console.log("[AkiraPlayer][autoplay] post-handshake ok:", reason);
-                }
-            } catch (e) {
-                console.warn("[AkiraPlayer][autoplay] post-handshake exception:", { reason, error: e });
+                await v.play();
+                console.log("[AkiraPlayer][autoplay] ok", { reason, muted: v.muted });
+                return;
+            } catch (e1) {
+                console.warn("[AkiraPlayer][autoplay] bloqueado con audio, retry muted", {
+                    reason,
+                    error: (e1 as any)?.message || e1
+                });
+            }
+
+            // Fallback: autoplay muteado (suele funcionar)
+            try {
+                v.muted = true;
+                await v.play();
+                console.log("[AkiraPlayer][autoplay] ok (muted fallback)", { reason });
+                flashFeedback("Reproduciendo (silencio)");
+            } catch (e2) {
+                console.warn("[AkiraPlayer][autoplay] también falló muted", {
+                    reason,
+                    error: (e2 as any)?.message || e2
+                });
             }
         };
 
         const rafId = window.requestAnimationFrame(() => {
-            tryPlay("handshake-ready-raf");
+            void tryPlayRobust("post-handshake-raf");
         });
 
         autoplayRetryTimerRef.current = window.setTimeout(() => {
-            tryPlay("handshake-ready-t+160ms");
+            void tryPlayRobust("post-handshake-t+160ms");
         }, 160);
 
+        autoplayFinalRetryTimerRef.current = window.setTimeout(() => {
+            void tryPlayRobust("post-handshake-t+600ms");
+        }, 600);
+
         return () => {
+            cancelled = true;
             window.cancelAnimationFrame(rafId);
+
             if (autoplayRetryTimerRef.current) {
                 window.clearTimeout(autoplayRetryTimerRef.current);
                 autoplayRetryTimerRef.current = null;
             }
+            if (autoplayFinalRetryTimerRef.current) {
+                window.clearTimeout(autoplayFinalRetryTimerRef.current);
+                autoplayFinalRetryTimerRef.current = null;
+            }
         };
-    }, [autoplay, isPlayerBootReady, isMediaHandshakeReady, playbackHandshakeKey]);
+    }, [
+        autoplay,
+        isPlayerBootReady,
+        isMediaHandshakeReady,
+        isPreparingOverlayGoneCommitted,
+        playbackHandshakeKey
+    ]);
 
     // Fullscreen state
     useEffect(() => {
@@ -1469,13 +1586,13 @@ export function AkiraPlayer({
         };
     }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
 
-    // Fallback rehidratación modal
+    // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
         void hydrateEpisodesModalData();
     }, [showEpisodes, hydrateEpisodesModalData]);
 
-    // Thumbnails VTT
+    // Thumbnails VTT (hover preview)
     useEffect(() => {
         let cancelled = false;
 
@@ -1608,6 +1725,7 @@ export function AkiraPlayer({
             if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
             if (mediaReadyProbeTimerRef.current) window.clearTimeout(mediaReadyProbeTimerRef.current);
             if (autoplayRetryTimerRef.current) window.clearTimeout(autoplayRetryTimerRef.current);
+            if (autoplayFinalRetryTimerRef.current) window.clearTimeout(autoplayFinalRetryTimerRef.current);
             if (handshakeReadyRafRef.current) window.cancelAnimationFrame(handshakeReadyRafRef.current);
         };
     }, []);
@@ -1766,6 +1884,7 @@ export function AkiraPlayer({
         setSelectedSeasonNumber(nextSeason);
         setShowSeasonDropdown(false);
 
+        // Ya debería venir precargado por boot; esto solo revalida si cambió algo
         try {
             await hydrateEpisodesModalData();
         } catch {
@@ -1849,8 +1968,8 @@ export function AkiraPlayer({
                 ))}
             </video>
 
-            {/* OVERLAY real (boot + media + sync DOM) */}
-            {(!isPlayerBootReady || !isMediaHandshakeReady) && (
+            {/* OVERLAY de preparación real (boot + media) */}
+            {isPreparingUiVisible && (
                 <div className="akira-overlay-shell" aria-hidden="true">
                     <div className="akira-empty-state">Preparando reproducción...</div>
                 </div>
@@ -2315,7 +2434,7 @@ export function AkiraPlayer({
                             }}
                             title="Episodios"
                             aria-label="Episodios"
-                            disabled={!hasEpisodes || isEpisodesModalPreparing || !isPlayerBootReady}
+                            disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
                         >
                             {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
                             {hasEpisodes ? (
