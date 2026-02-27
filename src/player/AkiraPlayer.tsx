@@ -525,6 +525,11 @@ export function AkiraPlayer({
     const autoplayRetryTimerRef = useRef<number | null>(null);
     const autoplayFinalRetryTimerRef = useRef<number | null>(null);
 
+    /** ✅ Instant unmute timers/flags (autoplay bootstrap muted -> unmute ASAP) */
+    const instantUnmuteTimerRef = useRef<number | null>(null);
+    const instantUnmuteRafRef = useRef<number | null>(null);
+    const pendingInstantUnmuteRef = useRef(false);
+
     /** ✅ Overlay/timers de navegación episodio prev/next */
     const episodeNavOverlayHideTimerRef = useRef<number | null>(null);
     const episodeNavCommitTimerRef = useRef<number | null>(null);
@@ -839,6 +844,55 @@ export function AkiraPlayer({
         }
     };
 
+    const clearInstantUnmuteTimers = useCallback(() => {
+        if (instantUnmuteTimerRef.current) {
+            window.clearTimeout(instantUnmuteTimerRef.current);
+            instantUnmuteTimerRef.current = null;
+        }
+        if (instantUnmuteRafRef.current) {
+            window.cancelAnimationFrame(instantUnmuteRafRef.current);
+            instantUnmuteRafRef.current = null;
+        }
+    }, []);
+
+    const forceInstantUnmute = useCallback((reason: string) => {
+        const apply = () => {
+            const vv = videoRef.current;
+            if (!vv) return;
+
+            try {
+                vv.defaultMuted = false;
+                vv.muted = false;
+                vv.removeAttribute("muted");
+                if (!Number.isFinite(vv.volume) || vv.volume <= 0) vv.volume = 1;
+
+                console.log("[AkiraPlayer][autoplay] instant unmute", {
+                    reason,
+                    muted: vv.muted,
+                    volume: vv.volume,
+                    paused: vv.paused
+                });
+            } catch (e) {
+                console.warn("[AkiraPlayer][autoplay] instant unmute fallo", {
+                    reason,
+                    error: (e as any)?.message || e
+                });
+            }
+        };
+
+        clearInstantUnmuteTimers();
+
+        // "milésima 1"
+        instantUnmuteTimerRef.current = window.setTimeout(() => {
+            apply();
+        }, 1);
+
+        // respaldo: siguiente frame
+        instantUnmuteRafRef.current = window.requestAnimationFrame(() => {
+            apply();
+        });
+    }, [clearInstantUnmuteTimers]);
+
     const showEpisodeNavCard = (ep: EpisodeItem, direction: "prev" | "next") => {
         const thumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
 
@@ -968,6 +1022,10 @@ export function AkiraPlayer({
             window.clearTimeout(autoplayFinalRetryTimerRef.current);
             autoplayFinalRetryTimerRef.current = null;
         }
+
+        clearInstantUnmuteTimers();
+        pendingInstantUnmuteRef.current = false;
+
         if (episodeNavOverlayHideTimerRef.current) {
             window.clearTimeout(episodeNavOverlayHideTimerRef.current);
             episodeNavOverlayHideTimerRef.current = null;
@@ -977,7 +1035,7 @@ export function AkiraPlayer({
             episodeNavCommitTimerRef.current = null;
         }
         setEpisodeNavOverlay(null);
-    }, [playbackHandshakeKey]);
+    }, [playbackHandshakeKey, clearInstantUnmuteTimers]);
 
     // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
     useEffect(() => {
@@ -1405,6 +1463,12 @@ export function AkiraPlayer({
         const onPlay = () => {
             setPlaying(true);
             showControlsTemporarily();
+
+            // Si venimos de autoplay fallback muteado, intentar desmutear instantáneamente
+            if (pendingInstantUnmuteRef.current) {
+                forceInstantUnmute("onPlay");
+                pendingInstantUnmuteRef.current = false;
+            }
         };
 
         const onPause = () => {
@@ -1429,17 +1493,37 @@ export function AkiraPlayer({
             setDuration(v.duration || 0);
 
             if (autoplay || playlistNextAutoplayRef.current) {
-                v.muted = false;
-                if (!Number.isFinite(v.volume) || v.volume <= 0) {
-                    v.volume = 1;
-                }
+                (async () => {
+                    try {
+                        v.defaultMuted = false;
+                        v.muted = false;
+                        v.removeAttribute("muted");
+                        if (!Number.isFinite(v.volume) || v.volume <= 0) v.volume = 1;
 
-                v.play().then(() => {
-                    playlistNextAutoplayRef.current = false;
-                }).catch((e) => {
-                    console.warn("[AkiraPlayer][autoplay] onMeta bloqueado/no disponible (audio):", e);
-                    // no apagar el flag acá; dejamos que el post-handshake lo siga intentando
-                });
+                        await v.play();
+                        pendingInstantUnmuteRef.current = false;
+                        playlistNextAutoplayRef.current = false;
+                    } catch (e1) {
+                        console.warn("[AkiraPlayer][autoplay] onMeta audio bloqueado, mute bootstrap", e1);
+
+                        try {
+                            v.defaultMuted = true;
+                            v.muted = true;
+                            v.setAttribute("muted", "");
+                            if (!Number.isFinite(v.volume) || v.volume <= 0) v.volume = 1;
+
+                            pendingInstantUnmuteRef.current = true;
+                            await v.play();
+
+                            forceInstantUnmute("onMeta-muted-bootstrap");
+                            playlistNextAutoplayRef.current = false;
+                        } catch (e2) {
+                            pendingInstantUnmuteRef.current = false;
+                            console.warn("[AkiraPlayer][autoplay] onMeta mute bootstrap falló", e2);
+                            // dejamos que post-handshake siga intentando
+                        }
+                    }
+                })();
             }
         };
 
@@ -1488,7 +1572,10 @@ export function AkiraPlayer({
         v.volume = 1;
 
         if (autoplay) {
+            // intento temprano con audio; si falla, lo resolverá onMeta/post-handshake
+            v.defaultMuted = false;
             v.muted = false;
+            v.removeAttribute("muted");
             if (!Number.isFinite(v.volume) || v.volume <= 0) {
                 v.volume = 1;
             }
@@ -1508,9 +1595,17 @@ export function AkiraPlayer({
             v.removeEventListener("ended", onEnded);
             v.removeEventListener("error", onError);
         };
-    }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode, isPlayerBootReady]);
+    }, [
+        autoplay,
+        playlistMode,
+        isSeriesContext,
+        nextEpisodeInPlaylist,
+        onSelectEpisode,
+        isPlayerBootReady,
+        forceInstantUnmute
+    ]);
 
-    // ✅ Autoplay reforzado POST-handshake (SOLO con audio, sin fallback mute)
+    // ✅ Autoplay reforzado POST-handshake (audio -> muted bootstrap -> instant unmute)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1527,18 +1622,22 @@ export function AkiraPlayer({
 
         let cancelled = false;
 
-        const tryPlayWithAudioOnly = async (reason: string) => {
+        const tryPlayWithAudioThenInstantUnmute = async (reason: string) => {
             if (cancelled) return;
             if (!v.paused && !v.ended) return;
 
+            // 1) Intento directo con audio
             try {
-                // ✅ Forzar intento con audio
+                v.defaultMuted = false;
                 v.muted = false;
+                v.removeAttribute("muted");
                 if (!Number.isFinite(v.volume) || v.volume <= 0) {
                     v.volume = 1;
                 }
 
                 await v.play();
+
+                pendingInstantUnmuteRef.current = false;
 
                 console.log("[AkiraPlayer][autoplay] ok (audio)", {
                     reason,
@@ -1546,30 +1645,53 @@ export function AkiraPlayer({
                     volume: v.volume
                 });
 
-                // si venía de playlist, ya consumimos el flag
                 playlistNextAutoplayRef.current = false;
                 return;
-            } catch (e) {
-                console.warn("[AkiraPlayer][autoplay] bloqueado por navegador (audio)", {
+            } catch (e1) {
+                console.warn("[AkiraPlayer][autoplay] bloqueado con audio, intentando mute+instant-unmute", {
                     reason,
-                    error: (e as any)?.message || e
+                    error: (e1 as any)?.message || e1
+                });
+            }
+
+            // 2) Fallback: arrancar muteado
+            try {
+                v.defaultMuted = true;
+                v.muted = true;
+                v.setAttribute("muted", "");
+                if (!Number.isFinite(v.volume) || v.volume <= 0) {
+                    v.volume = 1;
+                }
+
+                pendingInstantUnmuteRef.current = true;
+                await v.play();
+
+                console.log("[AkiraPlayer][autoplay] ok (muted bootstrap), programando instant-unmute", {
+                    reason
                 });
 
-                // ❌ NO hacemos fallback a muted
-                flashFeedback("Autoplay con audio bloqueado");
+                forceInstantUnmute("post-play-muted-bootstrap");
+                playlistNextAutoplayRef.current = false;
+            } catch (e2) {
+                pendingInstantUnmuteRef.current = false;
+                console.warn("[AkiraPlayer][autoplay] también falló muted bootstrap", {
+                    reason,
+                    error: (e2 as any)?.message || e2
+                });
+                flashFeedback("Autoplay bloqueado");
             }
         };
 
         const rafId = window.requestAnimationFrame(() => {
-            void tryPlayWithAudioOnly("post-handshake-raf");
+            void tryPlayWithAudioThenInstantUnmute("post-handshake-raf");
         });
 
         autoplayRetryTimerRef.current = window.setTimeout(() => {
-            void tryPlayWithAudioOnly("post-handshake-t+160ms");
+            void tryPlayWithAudioThenInstantUnmute("post-handshake-t+160ms");
         }, 160);
 
         autoplayFinalRetryTimerRef.current = window.setTimeout(() => {
-            void tryPlayWithAudioOnly("post-handshake-t+600ms");
+            void tryPlayWithAudioThenInstantUnmute("post-handshake-t+600ms");
         }, 600);
 
         return () => {
@@ -1590,7 +1712,8 @@ export function AkiraPlayer({
         isPlayerBootReady,
         isMediaHandshakeReady,
         isPreparingOverlayGoneCommitted,
-        playbackHandshakeKey
+        playbackHandshakeKey,
+        forceInstantUnmute
     ]);
 
     // Fullscreen state
@@ -1878,10 +2001,14 @@ export function AkiraPlayer({
             if (autoplayRetryTimerRef.current) window.clearTimeout(autoplayRetryTimerRef.current);
             if (autoplayFinalRetryTimerRef.current) window.clearTimeout(autoplayFinalRetryTimerRef.current);
             if (handshakeReadyRafRef.current) window.cancelAnimationFrame(handshakeReadyRafRef.current);
+
+            clearInstantUnmuteTimers();
+            pendingInstantUnmuteRef.current = false;
+
             if (episodeNavOverlayHideTimerRef.current) window.clearTimeout(episodeNavOverlayHideTimerRef.current);
             if (episodeNavCommitTimerRef.current) window.clearTimeout(episodeNavCommitTimerRef.current);
         };
-    }, []);
+    }, [clearInstantUnmuteTimers]);
 
     // Derived
     const volumeIcon = useMemo(() => {
