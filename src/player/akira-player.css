@@ -697,10 +697,11 @@
     gap: 8px;
     transform: translateX(-50%);
     pointer-events: none;
+    width: var(--akira-hover-thumb-w-desktop) !important;
 }
 
 .akira-thumb-image {
-    width: var(--akira-hover-thumb-w-desktop) !important;
+    width: 100%;
     aspect-ratio: 16 / 9 !important;
     height: auto !important;
     display: flex;

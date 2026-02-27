@@ -103,7 +103,12 @@ type MovieTitleDbRow = {
     category?: string | null;
 };
 
-type FeedbackState = { text: string; visible: boolean } | null;
+type FeedbackState = {
+    visible: boolean;
+    text?: string;
+    iconSrc?: string;
+    iconAlt?: string;
+} | null;
 
 type EpisodeNavOverlayState = {
     visible: boolean;
@@ -613,9 +618,7 @@ export function AkiraPlayer({
         }, 2200);
     };
 
-    const flashFeedback = (text: string) => {
-        setFeedback({ text, visible: true });
-
+    const startFeedbackHideTimer = () => {
         if (feedbackTimerRef.current) {
             window.clearTimeout(feedbackTimerRef.current);
             feedbackTimerRef.current = null;
@@ -624,6 +627,16 @@ export function AkiraPlayer({
         feedbackTimerRef.current = window.setTimeout(() => {
             setFeedback((prev) => (prev ? { ...prev, visible: false } : prev));
         }, 700);
+    };
+
+    const flashFeedback = (text: string) => {
+        setFeedback({ text, visible: true });
+        startFeedbackHideTimer();
+    };
+
+    const flashFeedbackIcon = (iconSrc: string, iconAlt = "") => {
+        setFeedback({ iconSrc, iconAlt, visible: true });
+        startFeedbackHideTimer();
     };
 
     const closeFloatingPanels = () => {
@@ -1781,7 +1794,6 @@ export function AkiraPlayer({
                 try {
                     v.currentTime = pos;
                     setCurrentTime(pos);
-                    flashFeedback(`Continuar en ${fmtTime(pos)}`);
                 } catch {
                     // noop
                 }
@@ -2062,10 +2074,12 @@ export function AkiraPlayer({
 
         if (v.paused) {
             v.play().catch(() => { /* noop */ });
-            flashFeedback("Play");
+            // ✅ Si arranca a reproducir: mostrar ícono de PAUSE
+            flashFeedbackIcon(ICONS.pause, "Pausa");
         } else {
             v.pause();
-            flashFeedback("Pause");
+            // ✅ Si pausa: mostrar ícono de PLAY
+            flashFeedbackIcon(ICONS.play, "Play");
         }
     };
 
@@ -2324,7 +2338,17 @@ export function AkiraPlayer({
 
             {/* CENTER FEEDBACK */}
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
-                <div className="akira-feedback-pill">{feedback?.text ?? ""}</div>
+                <div className="akira-feedback-pill">
+                    {feedback?.iconSrc ? (
+                        <img
+                            src={feedback.iconSrc}
+                            alt={feedback.iconAlt || ""}
+                            style={{ width: 28, height: 28, display: "block" }}
+                        />
+                    ) : (
+                        feedback?.text ?? ""
+                    )}
+                </div>
             </div>
 
             {/* Backdrop paneles */}
