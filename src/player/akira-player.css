@@ -566,6 +566,29 @@
     opacity: 1;
 }
 
+/* (Opcional pero recomendado) para que anime suave */
+.akira-progress::-webkit-slider-thumb {
+    transition: width .12s ease, height .12s ease, margin-top .12s ease;
+}
+
+.akira-progress::-moz-range-thumb {
+    transition: width .12s ease, height .12s ease;
+}
+
+/* Hover del progress: agrandar thumb */
+.akira-progress-wrap:hover .akira-progress::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: 3px; /* ajustado para centrar en track de 28px */
+    opacity: 1;
+}
+
+.akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    opacity: 1;
+}
+
 .akira-thumb-preview {
     align-items: center;
     bottom: 30px;

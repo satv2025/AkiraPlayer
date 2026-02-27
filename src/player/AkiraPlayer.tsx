@@ -1,6 +1,6 @@
 // AkiraPlayer.tsx
 import Hls from "hls.js";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SubtitleTrackInput } from "../index";
 import { CONFIG } from "../config";
 import { supabase } from "../lib/supabase";
@@ -98,6 +98,17 @@ type MovieTitleDbRow = {
 
 type FeedbackState = { text: string; visible: boolean } | null;
 
+type ProgressRowLike = {
+    content_id?: string | null;
+    contentId?: string | null;
+    season_id?: string | null;
+    seasonId?: string | null;
+    episode_id?: string | null;
+    episodeId?: string | null;
+    position_seconds?: number | string | null;
+    duration_seconds?: number | string | null;
+};
+
 function clamp(n: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, n));
 }
@@ -194,6 +205,68 @@ function isSafariLikeForNativeHls(): boolean {
     return isIOS || isSafariDesktop;
 }
 
+function readProgressRowMeta(row: ProgressRowLike | null | undefined) {
+    if (!row) {
+        return {
+            contentId: null as string | null,
+            seasonId: null as string | null,
+            episodeId: null as string | null
+        };
+    }
+
+    const contentId =
+        row.content_id != null
+            ? String(row.content_id)
+            : row.contentId != null
+                ? String(row.contentId)
+                : null;
+
+    const seasonId =
+        row.season_id != null
+            ? String(row.season_id)
+            : row.seasonId != null
+                ? String(row.seasonId)
+                : null;
+
+    const episodeId =
+        row.episode_id != null
+            ? String(row.episode_id)
+            : row.episodeId != null
+                ? String(row.episodeId)
+                : null;
+
+    return { contentId, seasonId, episodeId };
+}
+
+function isStrictEpisodeProgressRowMatch(params: {
+    row: ProgressRowLike | null | undefined;
+    contentId: string;
+    episodeId: string;
+    seasonId?: string | null;
+    requireEpisodeId?: boolean;
+}): boolean {
+    const { row, contentId, episodeId, seasonId, requireEpisodeId = true } = params;
+    if (!row) return false;
+
+    const meta = readProgressRowMeta(row);
+
+    // Si el row trae contentId, validar
+    if (meta.contentId != null && meta.contentId !== String(contentId)) return false;
+
+    // En listado / restore de episodios, exigimos match de episodeId
+    if (requireEpisodeId) {
+        if (meta.episodeId == null) return false;
+        if (meta.episodeId !== String(episodeId)) return false;
+    }
+
+    // Si ambos existen, validar season también
+    if (seasonId != null && meta.seasonId != null && String(seasonId) !== String(meta.seasonId)) {
+        return false;
+    }
+
+    return true;
+}
+
 async function loadEpisodesProgressReal(params: {
     contentId: string;
     seasonId?: string | null;
@@ -208,25 +281,45 @@ async function loadEpisodesProgressReal(params: {
         episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
             let row: any = null;
 
+            // ✅ Probamos exacto por season del ep / player, luego fallback null
+            // pero SIEMPRE validando el episodeId devuelto
             const seasonCandidates = Array.from(
-                new Set<(string | null | undefined)>([
-                    ep.seasonId ?? undefined,
-                    seasonId ?? undefined,
-                    undefined
+                new Set<(string | null)>([
+                    ep.seasonId ?? null,
+                    seasonId ?? null,
+                    null
                 ])
             );
 
             for (const sId of seasonCandidates) {
+                let candidate: any = null;
+
                 try {
-                    row = await loadProgress({
+                    candidate = await loadProgress({
                         contentId,
-                        seasonId: sId ?? null,
+                        seasonId: sId,
                         episodeId: ep.id
                     });
                 } catch {
-                    row = null;
+                    candidate = null;
                 }
-                if (row) break;
+
+                if (!candidate) continue;
+
+                if (
+                    !isStrictEpisodeProgressRowMatch({
+                        row: candidate,
+                        contentId,
+                        episodeId: ep.id,
+                        seasonId: ep.seasonId ?? sId ?? null,
+                        requireEpisodeId: true
+                    })
+                ) {
+                    continue;
+                }
+
+                row = candidate;
+                break;
             }
 
             const positionSeconds = Number((row as any)?.position_seconds || 0);
@@ -400,6 +493,10 @@ export function AkiraPlayer({
     /** ✅ Para forzar autoplay cuando avanza al siguiente episodio en playlist mode */
     const playlistNextAutoplayRef = useRef(false);
 
+    /** ✅ Evita races y duplicados al hidratar modal */
+    const episodesModalHydrationSeqRef = useRef(0);
+    const episodesModalHydratedSignatureRef = useRef<string>("");
+
     const [playing, setPlaying] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [muted, setMuted] = useState(false);
@@ -415,6 +512,7 @@ export function AkiraPlayer({
 
     const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<string, EpisodeProgressInfo>>({});
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
+    const [isEpisodesModalPreparing, setIsEpisodesModalPreparing] = useState(false);
 
     /** ✅ título/categoría reales desde movies */
     const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
@@ -528,8 +626,8 @@ export function AkiraPlayer({
     }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
 
     /**
-     * ✅ Playlist mode helpers (deben estar ANTES del useEffect de Video events)
-     * para evitar TS2448/TS2454: "usada antes de su declaración"
+     * ✅ Playlist helpers ANTES del useEffect de video
+     * (evita TS2448 / TS2454)
      */
     const orderedEpisodes = useMemo(() => {
         return [...episodes].sort((a, b) => {
@@ -554,6 +652,76 @@ export function AkiraPlayer({
         if (currentEpisodeIndexInPlaylist < 0) return null;
         return orderedEpisodes[currentEpisodeIndexInPlaylist + 1] ?? null;
     }, [orderedEpisodes, currentEpisodeIndexInPlaylist]);
+
+    /** ✅ Season efectivo para progresos del episodio actual */
+    const effectiveSeasonIdForCurrentEpisode = useMemo(() => {
+        return currentEpisodeData?.seasonId ?? seasonId ?? null;
+    }, [currentEpisodeData, seasonId]);
+
+    /** ✅ Firma para saber si ya hidratamos el modal con este set de episodios */
+    const episodesModalDataSignature = useMemo(() => {
+        const compact = episodes.map((ep) => [
+            String(ep.id),
+            ep.seasonId ?? null,
+            ep.seasonNumber ?? null,
+            ep.episodeNumber ?? null,
+            ep.durationSeconds ?? null,
+            Boolean(pickEpisodeThumbValue(ep))
+        ]);
+        return JSON.stringify({
+            contentId: String(contentId || ""),
+            seasonId: seasonId ?? null,
+            episodes: compact
+        });
+    }, [contentId, seasonId, episodes]);
+
+    const hydrateEpisodesModalData = useCallback(
+        async (opts?: { force?: boolean }) => {
+            const force = Boolean(opts?.force);
+
+            if (!contentId || !episodes.length) {
+                setEpisodeProgressMap({});
+                setEpisodeThumbsMap({});
+                episodesModalHydratedSignatureRef.current = episodesModalDataSignature;
+                return;
+            }
+
+            // ✅ Evita rehacer trabajo si ya está fresco
+            if (!force && episodesModalHydratedSignatureRef.current === episodesModalDataSignature) {
+                return;
+            }
+
+            const seq = ++episodesModalHydrationSeqRef.current;
+            setIsEpisodesModalPreparing(true);
+
+            try {
+                const [progressMap, thumbsMap] = await Promise.all([
+                    loadEpisodesProgressReal({
+                        contentId,
+                        seasonId,
+                        episodes
+                    }),
+                    loadEpisodeThumbsFromSupabase({ episodes })
+                ]);
+
+                if (episodesModalHydrationSeqRef.current !== seq) return;
+
+                setEpisodeProgressMap(progressMap);
+                setEpisodeThumbsMap((prev) => ({ ...prev, ...thumbsMap }));
+                episodesModalHydratedSignatureRef.current = episodesModalDataSignature;
+            } catch (e) {
+                console.warn("[AkiraPlayer] Error hidratando data del modal de episodios:", e);
+                if (episodesModalHydrationSeqRef.current !== seq) return;
+                // igual marcamos firma para no entrar en loop agresivo
+                episodesModalHydratedSignatureRef.current = episodesModalDataSignature;
+            } finally {
+                if (episodesModalHydrationSeqRef.current === seq) {
+                    setIsEpisodesModalPreparing(false);
+                }
+            }
+        },
+        [contentId, seasonId, episodes, episodesModalDataSignature]
+    );
 
     const goBackToOpenedTitle = () => {
         if (onBack) {
@@ -855,13 +1023,40 @@ export function AkiraPlayer({
         if (!duration || !Number.isFinite(duration)) return;
         if (restoredRef.current) return;
 
+        // ✅ Evitar load genérico de progreso en contexto serie sin episodeId
+        if (isSeriesContext && !episodeId) {
+            restoredRef.current = true;
+            return;
+        }
+
         let cancelled = false;
 
         (async () => {
-            const row = await loadProgress({ contentId, seasonId, episodeId });
+            const row = await loadProgress({
+                contentId,
+                seasonId: effectiveSeasonIdForCurrentEpisode,
+                episodeId
+            });
+
             if (cancelled || !row) {
                 restoredRef.current = true;
                 return;
+            }
+
+            // ✅ Si es serie, validar que el progreso devuelto sea del episodio actual
+            if (isSeriesContext && episodeId) {
+                if (
+                    !isStrictEpisodeProgressRowMatch({
+                        row,
+                        contentId,
+                        episodeId,
+                        seasonId: effectiveSeasonIdForCurrentEpisode,
+                        requireEpisodeId: true
+                    })
+                ) {
+                    restoredRef.current = true;
+                    return;
+                }
             }
 
             const pos = Number((row as any).position_seconds || 0);
@@ -889,7 +1084,7 @@ export function AkiraPlayer({
         return () => {
             cancelled = true;
         };
-    }, [duration, contentId, seasonId, episodeId]);
+    }, [duration, contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
 
     // Continue Watching (throttled save)
     useEffect(() => {
@@ -904,9 +1099,12 @@ export function AkiraPlayer({
             const total = v.duration || 0;
             if (!Number.isFinite(total) || total <= 0) return;
 
+            // ✅ Si es contexto serie pero no hay episodeId, no guardamos (evita contaminar progreso)
+            if (isSeriesContext && !episodeId) return;
+
             void saveProgress({
                 contentId,
-                seasonId,
+                seasonId: effectiveSeasonIdForCurrentEpisode,
                 episodeId,
                 positionSeconds: v.currentTime || 0,
                 durationSeconds: total
@@ -915,7 +1113,7 @@ export function AkiraPlayer({
 
         v.addEventListener("timeupdate", onTimeUpdateSave);
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
-    }, [contentId, seasonId, episodeId]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
 
     // Continue Watching (flush)
     useEffect(() => {
@@ -926,9 +1124,12 @@ export function AkiraPlayer({
             const total = v.duration || 0;
             if (!Number.isFinite(total) || total <= 0) return;
 
+            // ✅ Si es contexto serie pero no hay episodeId, no guardamos
+            if (isSeriesContext && !episodeId) return;
+
             void saveProgress({
                 contentId,
-                seasonId,
+                seasonId: effectiveSeasonIdForCurrentEpisode,
                 episodeId,
                 positionSeconds: v.currentTime || 0,
                 durationSeconds: total
@@ -948,66 +1149,13 @@ export function AkiraPlayer({
             window.removeEventListener("beforeunload", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
-    }, [contentId, seasonId, episodeId]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
 
-    // Progreso de TODOS los episodios
+    // ✅ Fallback: si el modal ya está abierto y cambia la lista/temporada desde props, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
-
-        let cancelled = false;
-
-        (async () => {
-            try {
-                if (!episodes.length) {
-                    if (!cancelled) setEpisodeProgressMap({});
-                    return;
-                }
-
-                const progressMap = await loadEpisodesProgressReal({
-                    contentId,
-                    seasonId,
-                    episodes
-                });
-
-                if (!cancelled) setEpisodeProgressMap(progressMap);
-            } catch (e) {
-                console.warn("[AkiraPlayer] No se pudo cargar progreso de episodios:", e);
-                if (!cancelled) setEpisodeProgressMap({});
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [showEpisodes, episodes, contentId, seasonId]);
-
-    // Hidratar thumbs episodios desde Supabase (si faltan)
-    useEffect(() => {
-        if (!showEpisodes) return;
-
-        let cancelled = false;
-
-        (async () => {
-            try {
-                if (!episodes.length) {
-                    if (!cancelled) setEpisodeThumbsMap({});
-                    return;
-                }
-
-                const thumbsMap = await loadEpisodeThumbsFromSupabase({ episodes });
-
-                if (!cancelled && Object.keys(thumbsMap).length) {
-                    setEpisodeThumbsMap((prev) => ({ ...prev, ...thumbsMap }));
-                }
-            } catch (e) {
-                console.warn("[AkiraPlayer] No se pudieron hidratar thumbs desde Supabase:", e);
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [showEpisodes, episodes]);
+        void hydrateEpisodesModalData();
+    }, [showEpisodes, hydrateEpisodesModalData]);
 
     // Thumbnails VTT (hover preview)
     useEffect(() => {
@@ -1300,14 +1448,21 @@ export function AkiraPlayer({
         showControlsTemporarily();
     };
 
-    const openEpisodesPanel = () => {
+    const openEpisodesPanel = async () => {
         closeFloatingPanels();
 
         const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
         const nextSeason = currentEpisode?.seasonNumber === 2 ? 2 : 1;
         setSelectedSeasonNumber(nextSeason);
-
         setShowSeasonDropdown(false);
+
+        // ✅ Primero hidrata data del modal (progreso + thumbs), después abre
+        try {
+            await hydrateEpisodesModalData();
+        } catch {
+            // noop
+        }
+
         setShowEpisodes(true);
         showControlsTemporarily();
     };
@@ -1496,7 +1651,6 @@ export function AkiraPlayer({
 
                             {/* Dropdown custom temporada */}
                             <div className="akira-season-dd" ref={seasonDropdownRef}>
-
                                 <button
                                     type="button"
                                     className={`akira-season-dd-trigger ${showSeasonDropdown ? "open" : ""}`}
@@ -1540,8 +1694,7 @@ export function AkiraPlayer({
                                                 >
                                                     <span className="akira-season-dd-item-text">Temporada {s}</span>
                                                     {active && (
-                                                        <span className="akira-season-dd-check" aria-hidden="true">
-                                                        </span>
+                                                        <span className="akira-season-dd-check" aria-hidden="true" />
                                                     )}
                                                 </button>
                                             );
@@ -1567,7 +1720,11 @@ export function AkiraPlayer({
                     </div>
 
                     <div className="akira-modal-body">
-                        {episodes.length === 0 ? (
+                        {isEpisodesModalPreparing ? (
+                            <div className="akira-empty-state">
+                                Cargando episodios...
+                            </div>
+                        ) : episodes.length === 0 ? (
                             <div className="akira-empty-state">
                                 No hay episodios cargados todavía.
                             </div>
@@ -1839,13 +1996,13 @@ export function AkiraPlayer({
                             className="akira-text-btn"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                openEpisodesPanel();
+                                void openEpisodesPanel();
                             }}
                             title="Episodios"
                             aria-label="Episodios"
-                            disabled={!hasEpisodes}
+                            disabled={!hasEpisodes || isEpisodesModalPreparing}
                         >
-                            Episodios
+                            {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
                             {hasEpisodes ? (
                                 <span className="akira-text-btn-count">{episodes.length}</span>
                             ) : null}
