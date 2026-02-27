@@ -1086,12 +1086,22 @@ export function AkiraPlayer({
     }, []);
 
     // Derived
-    const volumeIcon = useMemo(() => {
-        if (muted) return ICONS.volume.mute;
-        if (volume === 0) return ICONS.volume.vol0;
-        if (volume <= 0.5) return ICONS.volume.vol1;
-        return ICONS.volume.vol2;
-    }, [ICONS, muted, volume]);
+const volumeIcon = useMemo(() => {
+    // Si está muteado explícitamente -> mute
+    if (muted) return ICONS.volume.mute;
+
+    // Slider en 0% -> mute
+    if (volume <= 0) return ICONS.volume.mute;
+
+    // Muy bajito (ej. 2% a 5%) -> vol0
+    if (volume <= 0.05) return ICONS.volume.vol0;
+
+    // Medio -> vol1
+    if (volume <= 0.5) return ICONS.volume.vol1;
+
+    // Alto -> vol2
+    return ICONS.volume.vol2;
+}, [ICONS, muted, volume]);
 
     const progressPct = useMemo(() => {
         if (!duration || !Number.isFinite(duration)) return 0;
@@ -1186,16 +1196,18 @@ export function AkiraPlayer({
         showControlsTemporarily();
     };
 
-    const onVolumeInput = (value: number) => {
-        const v = videoRef.current;
-        if (!v) return;
+const onVolumeInput = (value: number) => {
+    const v = videoRef.current;
+    if (!v) return;
 
-        v.volume = value;
-        if (value > 0 && v.muted) v.muted = false;
+    v.volume = value;
 
-        flashFeedback(`Vol ${Math.round(value * 100)}%`);
-        showControlsTemporarily();
-    };
+    // Consistencia: 0 => mute, >0 => unmute
+    v.muted = value <= 0;
+
+    flashFeedback(`Vol ${Math.round(value * 100)}%`);
+    showControlsTemporarily();
+};
 
     const toggleFullscreen = async () => {
         const el = wrapRef.current;
