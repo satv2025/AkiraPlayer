@@ -1,1549 +1,1907 @@
-@import url("https://satvplus.com.ar/css/fonts/hbomaxsans/hbomaxsans.css");:root {
-    --akira-grad: linear-gradient(90deg,#00eaff,#2563eb);
-    --akira-track: hsla(0,0%,100%,.24);
-    --akira-track-strong: hsla(0,0%,100%,.4);
+@import url("https://satvplus.com.ar/css/fonts/hbomaxsans/hbomaxsans.css");
+
+:root {
+    --akira-grad: linear-gradient(90deg, #00eaff, #2563eb);
+    --akira-track: hsla(0, 0%, 100%, 0.24);
+    --akira-track-strong: hsla(0, 0%, 100%, 0.4);
     --akira-thumb-blue: #2563eb;
     --akira-volume-percent: 100%;
-    --akira-progress-bleed: 4px
+    --akira-progress-bleed: 4px;
+
+    /* ===== Overlay prev/next anclado visualmente al center cluster ===== */
+    --akira-step-popover-bottom-desktop: 172px;
+    --akira-step-popover-bottom-tablet: 128px;
+    --akira-step-popover-bottom-mobile: 96px;
+
+    /* Popover size */
+    --akira-step-popover-width: 600px;
+    --akira-step-popover-gap: 16px;
+    --akira-step-popover-pad-y: 14px;
+    --akira-step-popover-pad-x: 14px;
+    --akira-step-thumb-width: 196px;
+
+    /* Distancia entre botón y popover */
+    --akira-step-anchor-gap: 18px;
+
+    /* Offset del centro del botón prev/next respecto al centro del center-cluster
+       Desktop (53,64,82,64,53 + gaps 12) ~= 156px */
+    --akira-step-btn-center-offset-desktop: 156px;
+    --akira-step-btn-center-offset-tablet: 138px;
+    --akira-step-btn-center-offset-mobile: 121px;
+
+    /* Hover preview timeline */
+    --akira-hover-thumb-w-desktop: 336px;
+    --akira-hover-thumb-w-tablet: 240px;
+    --akira-hover-thumb-w-mobile: 180px;
 }
 
 * {
     box-sizing: border-box;
-    font-family: HBOMaxSans!important
+    font-family: HBOMaxSans !important;
 }
 
+/* =========================================================
+   BASE
+   ========================================================= */
+
 .akira-wrap {
+    background: #000;
     color: #fff;
     max-width: 100%;
+    width: 100%;
     outline: none;
     overflow: hidden;
     position: relative;
-    -moz-user-select: none;
     user-select: none;
-    -webkit-user-select: none
-}
-
-.akira-video,.akira-wrap {
-    background: #000;
-    width: 100%
+    -webkit-user-select: none;
+    -moz-user-select: none;
 }
 
 .akira-video {
-    aspect-ratio: 16/9;
+    background: #000;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     display: block;
     height: 100vh;
     max-height: 100%;
-    -o-object-fit: contain;
-    object-fit: contain
+    object-fit: contain;
 }
 
+/* =========================================================
+   GESTURE LAYER
+   ========================================================= */
+
 .akira-gesture-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    inset: 0;
     pointer-events: none;
-    position: absolute;
-    z-index: 2
 }
 
 .akira-gesture-zone {
     background: transparent;
     border: 0;
-    cursor: default;
     margin: 0;
-    opacity: 0;
     padding: 0;
-    pointer-events: auto
+    opacity: 0;
+    cursor: default;
+    pointer-events: auto;
 }
 
 .akira-gesture-zone.center {
-    cursor: pointer
+    cursor: pointer;
 }
 
+/* =========================================================
+   TOP OVERLAY
+   ========================================================= */
+
 .akira-top-overlay {
-    align-items: flex-start;
-    background: linear-gradient(180deg,rgba(0,0,0,.86),rgba(0,0,0,.38),transparent);
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 11;
     display: flex;
+    align-items: flex-start;
     justify-content: flex-start;
-    left: 0;
     padding: 22px 28px 30px;
     pointer-events: none;
-    position: absolute;
-    right: 0;
-    top: 0;
-    transition: opacity .2s ease;
-    z-index: 11
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.86),
+        rgba(0, 0, 0, 0.38),
+        transparent
+    );
+    transition: opacity 0.2s ease;
 }
 
 .akira-top-left {
-    pointer-events: auto
+    pointer-events: auto;
 }
 
 .akira-top-meta {
     min-width: 0;
-    pointer-events: none
+    pointer-events: none;
 }
 
 .akira-channel {
     font-size: 19px;
     font-weight: 700;
-    letter-spacing: .1em;
+    letter-spacing: 0.1em;
     margin-bottom: 8px;
-    opacity: .82;
-    text-transform: uppercase
+    opacity: 0.82;
+    text-transform: uppercase;
 }
 
 .akira-title {
     font-size: 30px;
     font-weight: 800;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
     line-height: 1.05;
-    text-shadow: 0 2px 16px rgba(0,0,0,.45)
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .akira-back-btn {
     border-radius: 999px;
     font-size: 24px;
+    width: 48px;
     height: 48px;
     line-height: 1;
-    width: 48px
+    padding-bottom: 0.5em;
+    padding-right: 0.3em;
 }
 
+/* =========================================================
+   FEEDBACK
+   ========================================================= */
+
 .akira-feedback {
-    left: 50%;
-    opacity: 0;
-    pointer-events: none;
     position: absolute;
     top: 50%;
-    transform: translate(-50%,-50%);
-    transition: opacity .15s ease;
-    z-index: 14
+    left: 50%;
+    z-index: 14;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
 }
 
 .akira-feedback.show {
-    opacity: 0
+    opacity: 1;
 }
 
 .akira-feedback-pill {
-    background: rgba(0,0,0,.78);
-    border: 1px solid hsla(0,0%,100%,.16);
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid hsla(0, 0%, 100%, 0.16);
     border-radius: 999px;
     font-size: 16px;
     font-weight: 700;
-    padding: 14px 18px
+    padding: 14px 18px;
 }
 
+/* =========================================================
+   OVERLAY / MODALS
+   ========================================================= */
+
 .akira-overlay-shell {
-    background: rgba(0,0,0,.42);
-    inset: 0;
     position: absolute;
-    z-index: 15
+    inset: 0;
+    z-index: 15;
+    background: rgba(0, 0, 0, 0.42);
 }
 
 .akira-modal {
-    background: hsla(0,0%,5%,.96);
-    border: 1px solid hsla(0,0%,100%,.08);
-    border-radius: .25em;
-    box-shadow: 0 12px 34px rgba(0,0,0,.38);
-    display: grid;
-    grid-template-rows: auto 1fr;
-    height: min(78vh,760px);
-    left: 50%;
-    overflow: hidden;
     position: absolute;
     top: 50%;
-    transform: translate(-50%,-50%);
-    width: min(1100px,calc(100vw - 32px));
-    z-index: 16
+    left: 50%;
+    z-index: 16;
+    transform: translate(-50%, -50%);
+    width: min(1100px, calc(100vw - 32px));
+    height: min(78vh, 760px);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    background: hsla(0, 0%, 5%, 0.96);
+    border: 1px solid hsla(0, 0%, 100%, 0.08);
+    border-radius: 0.25em;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
 }
 
 .akira-modal-reco {
-    height: min(82vh,820px);
-    width: min(1200px,calc(100vw - 32px))
+    width: min(1200px, calc(100vw - 32px));
+    height: min(82vh, 820px);
 }
 
 .akira-modal-header {
-    align-items: center;
-    border-bottom: 1px solid hsla(0,0%,100%,.08);
     display: flex;
-    gap: 12px;
+    align-items: center;
     justify-content: space-between;
-    padding: 14px
+    gap: 12px;
+    padding: 14px;
+    border-bottom: 1px solid hsla(0, 0%, 100%, 0.08);
 }
 
 .akira-modal-title {
     font-size: 18px;
     font-weight: 700;
-    letter-spacing: -.02em
+    letter-spacing: -0.02em;
 }
 
 .akira-modal-close {
-    background: transparent;
+    width: 38px;
+    height: 38px;
     border: 0;
-    border-radius: .25em;
+    border-radius: 0.25em;
+    background: transparent;
     color: #fff;
     cursor: pointer;
     font-size: 18px;
-    height: 38px;
     line-height: 1;
-    transition: background .15s ease,transform .08s ease;
-    width: 38px
+    transition: background 0.15s ease, transform 0.08s ease;
 }
 
 .akira-modal-close:hover {
-    background: hsla(0,0%,100%,.1)
+    background: hsla(0, 0%, 100%, 0.1);
 }
 
 .akira-modal-close:active {
-    transform: scale(.97)
+    transform: scale(0.97);
 }
 
 .akira-modal-body {
     overflow: auto;
-    padding: 12px
+    padding: 12px;
 }
 
 .akira-empty-state {
-    border: 1px dashed hsla(0,0%,100%,.12);
-    border-radius: 12px;
-    color: hsla(0,0%,100%,.72);
-    display: grid;
-    font-size: 14px;
     min-height: 180px;
     padding: 16px;
+    display: grid;
     place-items: center;
-    text-align: center
+    text-align: center;
+    font-size: 14px;
+    color: hsla(0, 0%, 100%, 0.72);
+    border: 1px dashed hsla(0, 0%, 100%, 0.12);
+    border-radius: 12px;
 }
+
+/* =========================================================
+   EPISODES LIST
+   ========================================================= */
 
 .akira-episode-list {
     display: grid;
-    gap: 10px
+    gap: 10px;
 }
 
 .akira-episode-card {
-    background: hsla(0,0%,100%,.02);
-    border: 1px solid hsla(0,0%,100%,.06);
-    border-radius: .25em;
-    color: #fff;
-    cursor: pointer;
+    width: 100%;
     display: grid;
-    gap: 12px;
     grid-template-columns: 220px 1fr;
+    gap: 12px;
     padding: 10px;
     text-align: left;
-    transition: background .15s ease,border-color .15s ease,transform .08s ease;
-    width: 100%
+    color: #fff;
+    cursor: pointer;
+    background: hsla(0, 0%, 100%, 0.02);
+    border: 1px solid hsla(0, 0%, 100%, 0.06);
+    border-radius: 0.25em;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.08s ease;
 }
 
 .akira-episode-card:hover {
-    background: hsla(0,0%,100%,.05);
-    border-color: hsla(0,0%,100%,.14)
+    background: hsla(0, 0%, 100%, 0.05);
+    border-color: hsla(0, 0%, 100%, 0.14);
 }
 
 .akira-episode-card:active {
-    transform: scale(.998)
+    transform: scale(0.998);
 }
 
 .akira-episode-card.current {
-    background: linear-gradient(180deg,rgba(37,99,235,.12),hsla(0,0%,100%,.02));
-    border-color: rgba(37,99,235,.65);
-    box-shadow: inset 0 0 0 1px rgba(37,99,235,.25)
+    background: linear-gradient(
+        180deg,
+        rgba(37, 99, 235, 0.12),
+        hsla(0, 0%, 100%, 0.02)
+    );
+    border-color: rgba(37, 99, 235, 0.65);
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
 
 .akira-episode-thumb {
-    aspect-ratio: 16/9;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     background: #0b0c10;
-    border-radius: .25em;
-    width: 100%
+    border-radius: 0.25em;
+    position: relative;
+    overflow: hidden;
 }
 
 .akira-episode-thumb img {
-    display: block;
+    width: 100%;
     height: 100%;
-    -o-object-fit: cover;
+    display: block;
     object-fit: cover;
-    width: 100%
 }
 
 .akira-episode-badge {
-    background: rgba(0,0,0,.72);
-    border: 1px solid hsla(0,0%,100%,.12);
-    border-radius: 999px;
+    position: absolute;
+    left: 8px;
     bottom: 8px;
     display: none;
+    padding: 5px 8px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid hsla(0, 0%, 100%, 0.12);
+    border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
-    left: 8px;
-    letter-spacing: .04em;
-    padding: 5px 8px;
-    position: absolute
+    letter-spacing: 0.04em;
+}
+
+.akira-episode-thumb-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    width: 100%;
+    height: 4px;
+    background: transparent;
+    pointer-events: none;
+}
+
+.akira-episode-thumb-progress-fill {
+    width: 0;
+    height: 100%;
+    background: var(--akira-grad);
+    transition: width 0.18s ease;
 }
 
 .akira-episode-info {
-    align-content: start;
+    min-width: 0;
     display: grid;
+    align-content: start;
     gap: 7px;
-    min-width: 0
 }
 
 .akira-episode-title-row {
-    align-items: center;
+    min-width: 0;
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: 8px;
-    min-width: 0
 }
 
 .akira-episode-title {
     font-size: 16px;
     font-weight: 700;
-    letter-spacing: -.01em;
-    line-height: 1.25
+    letter-spacing: -0.01em;
+    line-height: 1.25;
 }
 
 .akira-episode-current-pill {
+    display: inline-flex;
     align-items: center;
-    background: rgba(37,99,235,.18);
-    border: 1px solid rgba(37,99,235,.55);
+    white-space: nowrap;
+    padding: 4px 8px;
+    background: rgba(37, 99, 235, 0.18);
+    border: 1px solid rgba(37, 99, 235, 0.55);
     border-radius: 999px;
     color: #dbeafe;
-    display: inline-flex;
     font-size: 11px;
     font-weight: 700;
-    padding: 4px 8px;
-    white-space: nowrap
 }
 
 .akira-episode-synopsis {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     line-clamp: 3;
-    -webkit-box-orient: vertical;
-    color: hsla(0,0%,100%,.78);
-    display: -webkit-box;
+    overflow: hidden;
+    color: hsla(0, 0%, 100%, 0.78);
     font-size: 13px;
     line-height: 1.38;
-    overflow: hidden
 }
 
 .akira-episode-meta {
-    color: hsla(0,0%,100%,.62);
+    color: hsla(0, 0%, 100%, 0.62);
     font-size: 12px;
-    font-variant-numeric: tabular-nums
+    font-variant-numeric: tabular-nums;
 }
+
+/* =========================================================
+   RECOMMENDATIONS
+   ========================================================= */
 
 .akira-reco-grid {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(5,minmax(0,1fr))
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .akira-reco-card {
-    align-content: start;
-    background: hsla(0,0%,100%,.02);
-    border: 1px solid hsla(0,0%,100%,.06);
-    border-radius: .25em;
-    color: #fff;
-    cursor: pointer;
     display: grid;
+    align-content: start;
     gap: 8px;
     padding: 10px;
     text-align: left;
-    transition: background .15s ease,border-color .15s ease,transform .08s ease
+    color: #fff;
+    cursor: pointer;
+    background: hsla(0, 0%, 100%, 0.02);
+    border: 1px solid hsla(0, 0%, 100%, 0.06);
+    border-radius: 0.25em;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.08s ease;
 }
 
 .akira-reco-card:hover {
-    background: hsla(0,0%,100%,.05);
-    border-color: hsla(0,0%,100%,.14)
+    background: hsla(0, 0%, 100%, 0.05);
+    border-color: hsla(0, 0%, 100%, 0.14);
 }
 
 .akira-reco-card:active {
-    transform: scale(.99)
+    transform: scale(0.99);
 }
 
 .akira-reco-poster {
-    aspect-ratio: 2/3;
-    background: #0b0c10;
-    border-radius: .25em;
-    overflow: hidden;
     position: relative;
-    width: 100%
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    background: #0b0c10;
+    border-radius: 0.25em;
+    overflow: hidden;
 }
 
 .akira-reco-poster img {
-    display: block;
+    width: 100%;
     height: 100%;
-    -o-object-fit: cover;
+    display: block;
     object-fit: cover;
-    width: 100%
 }
 
 .akira-reco-type {
-    background: rgba(0,0,0,.72);
-    border: 1px solid hsla(0,0%,100%,.12);
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 4px 7px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid hsla(0, 0%, 100%, 0.12);
     border-radius: 999px;
     font-size: 10px;
     font-weight: 700;
-    left: 8px;
-    letter-spacing: .04em;
-    padding: 4px 7px;
-    position: absolute;
-    top: 8px
+    letter-spacing: 0.04em;
 }
 
 .akira-reco-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
+    overflow: hidden;
     font-size: 14px;
     font-weight: 700;
-    line-height: 1.28
-}
-
-.akira-reco-synopsis,.akira-reco-title {
-    -webkit-box-orient: vertical;
-    display: -webkit-box;
-    overflow: hidden
+    line-height: 1.28;
 }
 
 .akira-reco-synopsis {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     line-clamp: 3;
-    color: hsla(0,0%,100%,.72);
+    overflow: hidden;
+    color: hsla(0, 0%, 100%, 0.72);
     font-size: 12px;
-    line-height: 1.32
+    line-height: 1.32;
 }
 
+/* =========================================================
+   CONTROLS
+   ========================================================= */
+
 .akira-controls {
-    background: linear-gradient(0deg,rgba(0,0,0,.9),rgba(0,0,0,.5),transparent);
-    bottom: 0;
-    left: 0;
-    padding: 14px 20px 18px;
     position: absolute;
+    left: 0;
     right: 0;
-    transition: opacity .2s ease,transform .2s ease;
-    z-index: 12
+    bottom: 0;
+    z-index: 12;
+    padding: 14px 20px 18px;
+    background: linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.9),
+        rgba(0, 0, 0, 0.5),
+        transparent
+    );
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    overflow: visible !important; /* clave para popovers */
 }
 
 .akira-wrap.controls-hidden .akira-controls {
     opacity: 0;
     pointer-events: none;
-    transform: translateY(10px)
+    transform: translateY(10px);
 }
 
 .akira-wrap.controls-hidden .akira-top-overlay {
-    opacity: 0
+    opacity: 0;
 }
 
-.akira-wrap.controls-visible .akira-controls,.akira-wrap.controls-visible .akira-top-overlay {
-    opacity: 1
+.akira-wrap.controls-visible .akira-controls,
+.akira-wrap.controls-visible .akira-top-overlay {
+    opacity: 1;
 }
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
 
 .akira-progress-row {
-    align-items: center;
     display: grid;
-    gap: 0;
     grid-template-columns: auto 1fr auto;
-    margin-bottom: 16px
+    align-items: center;
+    gap: 0;
+    margin-bottom: 16px;
 }
 
 .akira-time {
-    font-size: 17px;
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
     min-width: 75px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
     opacity: 1;
-    text-align: center
 }
 
 .akira-progress-wrap {
-    align-items: center;
+    position: relative;
     display: flex;
-    height: 28px;
+    align-items: center;
     min-width: 0;
+    height: 28px;
     overflow: visible;
-    position: relative
 }
 
 .akira-progress-visual {
+    position: absolute;
+    left: calc(var(--akira-progress-bleed) * -1);
+    right: calc(var(--akira-progress-bleed) * 0);
+    width: auto;
     height: 4.3px;
-    left: calc(var(--akira-progress-bleed)*-1);
     overflow: hidden;
     pointer-events: none;
-    position: absolute;
-    right: calc(var(--akira-progress-bleed)*0);
-    transition: height .12s ease;
-    width: auto
+    transition: height 0.12s ease;
 }
 
-.akira-progress-buffered,.akira-progress-played,.akira-progress-track {
-    bottom: 0;
-    left: 0;
+.akira-progress-track,
+.akira-progress-buffered,
+.akira-progress-played {
     position: absolute;
-    top: 0
+    left: 0;
+    top: 0;
+    bottom: 0;
 }
 
 .akira-progress-track {
-    background: hsla(0,0%,100%,.24);
-    right: 0
+    right: 0;
+    background: hsla(0, 0%, 100%, 0.24);
 }
 
 .akira-progress-buffered {
-    background: hsla(0,0%,100%,.4);
-    width: 0
+    width: 0;
+    background: hsla(0, 0%, 100%, 0.4);
 }
 
 .akira-progress-played {
-    background: linear-gradient(90deg,#00eaff,#2563eb);
-    width: 0
+    width: 0;
+    background: var(--akira-grad);
 }
 
 .akira-progress {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    background: transparent;
-    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    width: calc(100% + var(--akira-progress-bleed) * 2);
     height: 28px;
     margin: 0;
-    margin-left: calc(var(--akira-progress-bleed)*-1);
+    margin-left: calc(var(--akira-progress-bleed) * -1);
+    background: transparent;
+    cursor: pointer;
     opacity: 1;
-    position: relative;
-    width: calc(100% + var(--akira-progress-bleed)*2);
-    z-index: 2
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
 }
 
 .akira-progress::-webkit-slider-runnable-track {
+    height: 28px;
     background: transparent;
     border: 0;
-    height: 28px
 }
 
-.akira-progress::-moz-range-progress,.akira-progress::-moz-range-track {
+.akira-progress::-moz-range-track,
+.akira-progress::-moz-range-progress {
+    height: 28px;
     background: transparent;
     border: 0;
-    height: 28px
 }
 
 .akira-progress::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    background: #2563eb;
-    border: 0;
-    border-radius: 999px;
+    width: 18px;
     height: 18px;
     margin-top: 4.89px;
+    border: 0;
+    border-radius: 999px;
+    background: #2563eb;
     opacity: 1;
-    width: 18px
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        width 0.12s ease,
+        height 0.12s ease,
+        margin-top 0.12s ease;
+}
+
+.akira-progress::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: 0;
+    border-radius: 999px;
+    background: #2563eb;
+    opacity: 1;
+    transition: width 0.12s ease, height 0.12s ease;
 }
 
 .akira-progress-wrap:hover .akira-progress-visual {
-    height: 8px
-}
-
-.akira-progress::-moz-range-thumb {
-    background: #2563eb;
-    border: 0;
-    border-radius: 999px;
-    height: 18px;
-    opacity: 1;
-    width: 18px
-}
-
-.akira-progress::-webkit-slider-thumb {
-    -webkit-transition: width .12s ease,height .12s ease,margin-top .12s ease;
-    transition: width .12s ease,height .12s ease,margin-top .12s ease
-}
-
-.akira-progress::-moz-range-thumb {
-    -moz-transition: width .12s ease,height .12s ease;
-    transition: width .12s ease,height .12s ease
+    height: 8px;
 }
 
 .akira-progress-wrap:hover .akira-progress::-webkit-slider-thumb {
+    width: 22px;
     height: 22px;
     margin-top: 3px;
-    opacity: 1;
-    width: 22px
 }
 
 .akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
+    width: 22px;
     height: 22px;
-    opacity: 1;
-    width: 22px
 }
 
+/* =========================================================
+   HOVER PREVIEW (TIMELINE) - 16:9 SI O SI + AGRANDADO
+   ========================================================= */
+
 .akira-thumb-preview {
-    align-items: center;
-    bottom: 30px;
-    display: flex!important;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
     position: absolute;
+    bottom: 34px;
+    left: 0;
+    z-index: 55;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
     transform: translateX(-50%);
-    z-index: 10
+    pointer-events: none;
 }
 
 .akira-thumb-image {
-    align-items: center;
-    background: #0b0c10;
+    width: var(--akira-hover-thumb-w-desktop) !important;
+    aspect-ratio: 16 / 9 !important;
+    height: auto !important;
     display: flex;
-    height: 162px;
+    align-items: center;
     justify-content: center;
     overflow: hidden;
-    width: 288px
+    background: #0b0c10;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .akira-thumb-image img {
-    display: block;
+    width: 100%;
     height: 100%;
-    -o-object-fit: cover;
+    display: block;
     object-fit: cover;
-    width: 100%
+    aspect-ratio: 16 / 9;
 }
 
 .akira-thumb-sprite {
     background-repeat: no-repeat;
-    image-rendering: auto
+    image-rendering: auto;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 .akira-thumb-empty {
-    background: linear-gradient(135deg,#191919,#0f0f0f);
+    width: 100%;
     height: 100%;
-    width: 100%
+    background: linear-gradient(135deg, #191919, #0f0f0f);
 }
 
 .akira-thumb-time {
+    width: 100%;
+    margin-top: -0.45em;
+    padding: 10px 12px;
     background: #0b0c10;
     color: #fff;
-    font-size: 18px;
-    font-weight: 400;
-    margin-top: -.6em;
-    padding: 8px 10px;
     text-align: center;
-    width: 100%
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1;
 }
 
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
 .akira-toolbar {
-    align-items: center;
     display: grid;
-    gap: 14px;
     grid-template-columns: 1fr auto 1fr;
-    margin-top: -.7em
+    align-items: center;
+    gap: 14px;
+    margin-top: -0.7em;
+    position: relative;
+    z-index: 2;
 }
 
 .akira-left {
-    align-items: center;
+    justify-self: start;
+    min-width: 0;
+    margin-left: 1.3em;
     display: flex;
     flex-direction: row-reverse;
     flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
-    justify-self: start;
-    margin-left: 1.3em;
-    min-width: 0
 }
 
 .akira-center-cluster {
-    align-items: center;
+    justify-self: center;
     display: flex;
-    gap: 12px;
+    align-items: center;
     justify-content: center;
-    justify-self: center
+    gap: 12px;
+    position: relative; /* referencia visual */
 }
 
 .akira-right {
-    align-items: center;
-    display: flex;
-    gap: 10px;
     justify-self: end;
-    margin-right: .5em
+    margin-right: 0.5em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
 .akira-text-btn {
-    align-items: center;
-    background: hsla(0,0%,100%,.06);
-    border: none;
-    border-radius: 12px;
-    color: #fff;
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 14px;
-    font-weight: 600;
-    gap: 8px;
     height: 42px;
     padding: 0 14px;
-    transition: background .15s ease,transform .08s ease,border-color .15s ease;
-    white-space: nowrap
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    color: #fff;
+    background: hsla(0, 0%, 100%, 0.06);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition:
+        background 0.15s ease,
+        transform 0.08s ease,
+        border-color 0.15s ease;
 }
 
 .akira-text-btn:hover {
     background: #fff;
-    color: #000
+    color: #000;
 }
 
 .akira-text-btn:active {
-    transform: scale(.98)
+    transform: scale(0.98);
 }
 
 .akira-text-btn:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
-    opacity: .45;
-    pointer-events: none
+    pointer-events: none;
 }
 
 .akira-text-btn-count {
-    background: rgba(37,99,235,.9);
+    display: none !important;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    align-items: center;
+    justify-content: center;
+    background: rgba(37, 99, 235, 0.9);
     border-radius: 999px;
-    display: none!important;
+    color: #fff;
     font-size: 10px;
     font-weight: 800;
-    height: 18px;
-    min-width: 18px;
-    padding: 0 6px
 }
 
-.akira-ghost-btn,.akira-icon-btn,.akira-text-btn-count {
-    align-items: center;
-    color: #fff;
+.akira-ghost-btn,
+.akira-icon-btn {
     display: inline-flex;
-    justify-content: center
-}
-
-.akira-ghost-btn,.akira-icon-btn {
+    align-items: center;
+    justify-content: center;
+    color: #fff;
     background: transparent;
     border: 0;
-    border-radius: .25em;
+    border-radius: 0.25em;
     cursor: pointer;
-    transition: background .15s ease,opacity .15s ease,transform .08s ease
+    transition:
+        background 0.15s ease,
+        opacity 0.15s ease,
+        transform 0.08s ease;
 }
 
-.akira-back-btn {
-    padding-bottom: .5em;
-    padding-right: .3em
-}
-
-.akira-volume:has(.akira-volume-pop.show)>button,.akira-volume>button:hover {
-    background: hsla(0,0%,100%,.1);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: .25em;
-    border-top-left-radius: 0;
-    border-top-right-radius: .25em
-}
-
-.akira-volume .akira-icon-btn.lg {
-    padding-right: 0;
-    width: 77px!important
-}
-
-.akira-volume:has(.akira-volume-pop.show)>button {
-    background: hsla(0,0%,100%,0);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: .25em;
-    border-top-left-radius: 0;
-    border-top-right-radius: .25em
-}
-
-.akira-ghost-btn:hover,.akira-icon-btn:hover {
-    transform: scale(1.2)
+.akira-ghost-btn:hover,
+.akira-icon-btn:hover {
+    transform: scale(1.2);
 }
 
 .akira-icon-btn:hover {
-    border-radius: .25em
+    border-radius: 0.25em;
 }
 
-.akira-ghost-btn:active,.akira-icon-btn:active {
-    transform: scale(.97)
+.akira-ghost-btn:active,
+.akira-icon-btn:active {
+    transform: scale(0.97);
 }
 
 .akira-icon-btn:disabled {
+    opacity: 0.42;
     cursor: not-allowed;
-    opacity: .42;
-    pointer-events: none
-}
-
-.akira-icon-btn.lg {
-    height: 52px;
-    width: 53px
-}
-
-.akira-volume.akira-icon-btn img {
-    height: auto;
-    width: 44px
-}
-
-.akira-icon-btn.xl {
-    height: 64px;
-    width: 64px
-}
-
-.akira-icon-btn.xxl {
-    border-radius: 999px;
-    height: 82px;
-    margin-top: .2em;
-    width: 82px
-}
-
-.akira-icon-btn.emphasized,.akira-icon-btn.emphasized:hover {
-    background: hsla(0,0%,100%,0)
+    pointer-events: none;
 }
 
 .akira-ghost-btn {
+    width: 42px;
     height: 42px;
-    width: 42px
+}
+
+.akira-icon-btn.lg {
+    width: 53px;
+    height: 52px;
+}
+
+.akira-icon-btn.xl {
+    width: 64px;
+    height: 64px;
+}
+
+.akira-icon-btn.xxl {
+    width: 82px;
+    height: 82px;
+    margin-top: 0.2em;
+    border-radius: 999px;
+}
+
+.akira-icon-btn.emphasized,
+.akira-icon-btn.emphasized:hover {
+    background: transparent;
 }
 
 .akira-icon-btn img {
     display: block;
-    filter: brightness(0) saturate(100%) invert(97%) sepia(0) saturate(7488%) hue-rotate(184deg) brightness(105%) contrast(105%);
-    -o-object-fit: contain;
     object-fit: contain;
-    opacity: .98;
-    pointer-events: none
+    pointer-events: none;
+    opacity: 0.98;
+    filter: brightness(0) saturate(100%) invert(97%) sepia(0) saturate(7488%)
+        hue-rotate(184deg) brightness(105%) contrast(105%);
 }
 
 img.playSVG {
-    margin-right: -.4em
+    margin-right: -0.4em;
 }
 
 .akira-icon-btn.lg img {
+    width: 54px;
     height: auto;
-    width: 54px
 }
 
-.akira-volume button img {
+.akira-icon-btn.xl img,
+.akira-icon-btn.xxl img {
+    width: 51px;
     height: auto;
-    width: 105px!important
-}
-
-.akira-icon-btn.xl img,.akira-icon-btn.xxl img {
-    height: auto;
-    width: 51px
 }
 
 .akira-icon-btn.xxl img {
+    width: 56px;
     height: auto;
-    margin-top: -.3em;
-    width: 56px
+    margin-top: -0.3em;
 }
+
+.akira-center-cluster .akira-icon-btn.lg img {
+    width: 67px !important;
+    height: auto !important;
+    margin-top: 1.6em !important;
+}
+
+/* =========================================================
+   VOLUME
+   ========================================================= */
 
 .akira-volume {
-    align-items: center;
+    position: relative;
     display: flex;
-    position: relative
+    align-items: center;
 }
 
-.akira-volume .akira-icon-btn lg {
-    width: 80px!important
+.akira-volume .akira-icon-btn.lg {
+    width: 77px !important;
+    padding-right: 0;
+}
+
+.akira-volume button img {
+    width: 105px !important;
+    height: auto;
+}
+
+.akira-volume:has(.akira-volume-pop.show) > .akira-icon-btn.lg,
+.akira-volume > .akira-icon-btn:hover {
+    background: hsla(0, 0%, 100%, 0.1);
+    border-radius: 0.25em;
+    transform: scale(1.2);
+}
+
+.akira-volume:has(.akira-volume-pop.show) > button {
+    background: rgba(255, 255, 255, 0);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: 0.25em;
+    border-bottom-right-radius: 0.25em;
 }
 
 .akira-volume-pop {
-    background: #ff00;
-    border-radius: .25em;
-    bottom: 0;
-    height: 52px;
-    opacity: 0;
-    padding: 14px;
-    pointer-events: none;
     position: absolute;
     right: 99%;
+    bottom: 0;
+    width: 160px;
+    height: 52px;
+    padding: 14px;
+    background: transparent;
+    border-radius: 0.25em;
+    opacity: 0;
+    pointer-events: none;
     transform: translateY(0);
-    transition: opacity .15s ease,transform .15s ease;
-    width: 160px
+    transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .akira-volume-pop.show {
-    border-radius: .25em 0 0 .25em;
     opacity: 1;
-    pointer-events: auto
+    pointer-events: auto;
+    border-radius: 0.25em 0 0 0.25em;
 }
 
 .akira-volume-slider {
-    accent-color: #2563eb;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
+    width: 100%;
+    height: 18px;
     background: transparent;
     cursor: pointer;
-    height: 18px;
-    width: 100%
+    accent-color: #2563eb;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
 }
 
 .akira-volume-slider::-webkit-slider-runnable-track {
-    background: linear-gradient(#fff,#fff) 0 0 /var(--akira-volume-percent) 100% no-repeat,hsla(0,0%,100%,.24);
-    height: 5px
+    height: 5px;
+    background:
+        linear-gradient(#fff, #fff) 0 0 / var(--akira-volume-percent) 100% no-repeat,
+        hsla(0, 0%, 100%, 0.24);
 }
 
 .akira-volume-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    background: #fff;
+    width: 18px;
+    height: 18px;
+    margin-top: -6.5px;
+    margin-right: -0.3em;
     border: 0;
     border-radius: 999px;
+    background: #fff;
     cursor: pointer;
-    height: 18px;
-    margin-right: -.3em;
-    margin-top: -6.5px;
-    width: 18px
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .akira-volume-slider::-moz-range-track {
-    background: hsla(0,0%,100%,.24);
+    height: 5px;
+    background: hsla(0, 0%, 100%, 0.24);
     border: 0;
-    height: 5px
 }
 
 .akira-volume-slider::-moz-range-progress {
+    height: 5px;
     background: #fff;
     border: 0;
-    height: 5px
 }
 
 .akira-volume-slider::-moz-range-thumb {
-    background: #2563eb;
+    width: 18px;
+    height: 18px;
     border: 0;
     border-radius: 999px;
+    background: #2563eb;
     cursor: pointer;
-    height: 18px;
-    width: 18px
 }
 
+/* =========================================================
+   MENUS
+   ========================================================= */
+
 .akira-menu-wrap {
-    position: relative
+    position: relative;
 }
 
 .akira-menu {
-    background: hsla(0,0%,5%,.96);
-    border: 1px solid hsla(0,0%,100%,.08);
-    border-radius: .25em;
+    position: absolute;
+    right: 0;
     bottom: 58px;
-    box-shadow: 0 12px 34px rgba(0,0,0,.38);
+    min-width: 220px;
+    max-height: 280px;
+    overflow: auto;
+    padding: 8px;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 280px;
-    min-width: 220px;
-    overflow: auto;
-    padding: 8px;
-    position: absolute;
-    right: 0
+    background: hsla(0, 0%, 5%, 0.96);
+    border: 1px solid hsla(0, 0%, 100%, 0.08);
+    border-radius: 0.25em;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
 }
 
 .akira-menu-item {
-    background: transparent;
     border: 0;
-    border-radius: .25em;
+    border-radius: 0.25em;
+    background: transparent;
     color: #fff;
     cursor: pointer;
+    text-align: left;
     font-size: 15px;
     line-height: 1.2;
     padding: 12px;
-    text-align: left
 }
 
 .akira-menu-item:hover {
-    background: hsla(0,0%,100%,.08)
+    background: hsla(0, 0%, 100%, 0.08);
 }
 
-@media (max-width: 1240px) {
-    .akira-reco-grid {
-        grid-template-columns:repeat(4,minmax(0,1fr))
-    }
-
-    ;}
-
-@media (max-width: 1100px) {
-    .akira-title {
-        font-size:32px
-    }
-
-    .akira-time {
-        font-size: 15px;
-        min-width: 78px
-    }
-
-    .akira-thumb-image {
-        height: 106px;
-        width: 190px
-    }
-
-    .akira-icon-btn.xxl {
-        height: 70px;
-        width: 70px
-    }
-
-    .akira-icon-btn.xl {
-        height: 56px;
-        width: 56px
-    }
-
-    .akira-icon-btn.lg {
-        height: 46px;
-        width: 46px
-    }
-
-    .akira-text-btn {
-        font-size: 13px;
-        height: 40px;
-        padding: 0 12px
-    }
-
-    .akira-episode-card {
-        grid-template-columns: 200px 1fr
-    }
-
-    .akira-reco-grid {
-        grid-template-columns: repeat(3,minmax(0,1fr))
-    }
-
-    ;}
-
-@media (max-width: 780px) {
-    .akira-top-overlay {
-        padding:14px 14px 20px
-    }
-
-    .akira-title {
-        font-size: 22px
-    }
-
-    .akira-channel {
-        font-size: 11px;
-        margin-bottom: 5px
-    }
-
-    .akira-controls {
-        padding: 10px 12px 14px
-    }
-
-    .akira-progress-row {
-        gap: 8px;
-        margin-bottom: 12px
-    }
-
-    .akira-time {
-        font-size: 12px;
-        min-width: 58px
-    }
-
-    .akira-thumb-image {
-        height: 84px;
-        width: 150px
-    }
-
-    .akira-thumb-time {
-        font-size: 11px
-    }
-
-    .akira-toolbar {
-        gap: 10px;
-        grid-template-columns: 1fr
-    }
-
-    .akira-left {
-        justify-content: flex-start;
-        order: 1
-    }
-
-    .akira-right {
-        justify-content: flex-end;
-        order: 2
-    }
-
-    .akira-center-cluster {
-        justify-content: center;
-        order: 3
-    }
-
-    .akira-icon-btn.xxl {
-        height: 58px;
-        width: 58px
-    }
-
-    .akira-icon-btn.xl {
-        height: 48px;
-        width: 48px
-    }
-
-    .akira-icon-btn.lg {
-        height: 40px;
-        width: 40px
-    }
-
-    .akira-icon-btn.xxl img {
-        height: 28px;
-        width: 28px
-    }
-
-    .akira-icon-btn.xl img {
-        height: 24px;
-        width: 24px
-    }
-
-    .akira-icon-btn.lg img {
-        height: 20px;
-        width: 20px
-    }
-
-    .akira-text-btn {
-        border-radius: .25em;
-        font-size: 12px;
-        height: 36px;
-        padding: 0 10px
-    }
-
-    .akira-volume-pop {
-        width: 120px
-    }
-
-    .akira-menu {
-        bottom: 46px;
-        min-width: 170px
-    }
-
-    .akira-menu-item {
-        font-size: 13px;
-        padding: 10px
-    }
-
-    .akira-modal,.akira-modal-reco {
-        height: min(86vh,760px);
-        width: calc(100vw - 16px)
-    }
-
-    .akira-modal-header {
-        padding: 12px
-    }
-
-    .akira-modal-title {
-        font-size: 15px
-    }
-
-    .akira-modal-close {
-        font-size: 16px;
-        height: 34px;
-        width: 34px
-    }
-
-    .akira-modal-body {
-        padding: 10px
-    }
-
-    .akira-episode-card {
-        gap: 8px;
-        grid-template-columns: 1fr;
-        padding: 8px
-    }
-
-    .akira-episode-title {
-        font-size: 14px
-    }
-
-    .akira-episode-synopsis {
-        -webkit-line-clamp: 4;
-        line-clamp: 4;
-        font-size: 12px
-    }
-
-    .akira-reco-grid {
-        gap: 10px;
-        grid-template-columns: repeat(2,minmax(0,1fr))
-    }
-
-    .akira-reco-card {
-        padding: 8px
-    }
-
-    .akira-reco-title {
-        font-size: 13px
-    }
-
-    .akira-reco-synopsis {
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
-        font-size: 11px
-    }
-
-    ;}
+/* =========================================================
+   SEASON DROPDOWN
+   ========================================================= */
 
 .akira-season-dd {
-    align-items: center;
+    position: relative;
+    z-index: 2;
     display: inline-flex;
+    align-items: center;
     gap: 8px;
     min-width: 0;
-    position: relative;
-    z-index: 2
 }
 
 .akira-season-dd-label {
-    color: hsla(0,0%,100%,.88);
+    color: hsla(0, 0%, 100%, 0.88);
     font-size: 13px;
     font-weight: 600;
-    white-space: nowrap
+    white-space: nowrap;
 }
 
 .akira-season-dd-trigger {
-    align-items: center;
-    background: hsla(0,0%,100%,.06);
-    border: 1px solid hsla(0,0%,100%,.12);
-    border-radius: 8px;
-    color: #fff;
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 13px;
-    font-weight: 700;
-    gap: 10px;
     height: 34px;
-    justify-content: space-between;
-    line-height: 1;
     min-width: 88px;
     padding: 0 10px;
-    transition: background .15s ease,border-color .15s ease,transform .08s ease
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    line-height: 1;
+    color: #fff;
+    background: hsla(0, 0%, 100%, 0.06);
+    border: 1px solid hsla(0, 0%, 100%, 0.12);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.08s ease;
 }
 
 .akira-season-dd-trigger:hover {
-    background: hsla(0,0%,100%,.1);
-    border-color: hsla(0,0%,100%,.2)
+    background: hsla(0, 0%, 100%, 0.1);
+    border-color: hsla(0, 0%, 100%, 0.2);
 }
 
 .akira-season-dd-trigger:active {
-    transform: scale(.985)
+    transform: scale(0.985);
 }
 
 .akira-season-dd-trigger.open {
-    background: hsla(0,0%,100%,.12);
-    border-color: hsla(0,0%,100%,.22)
+    background: hsla(0, 0%, 100%, 0.12);
+    border-color: hsla(0, 0%, 100%, 0.22);
 }
 
 .akira-season-dd-caret {
     line-height: 1;
-    opacity: .9;
-    transition: transform .15s ease
+    opacity: 0.9;
+    transition: transform 0.15s ease;
 }
 
 .akira-season-dd-trigger.open .akira-season-dd-caret {
-    transform: rotate(180deg)
+    transform: rotate(180deg);
 }
 
 .akira-season-dd-menu {
-    background: hsla(0,0%,5%,.96);
-    border: 1px solid hsla(0,0%,100%,.08);
-    border-radius: 12px;
-    box-shadow: 0 12px 34px rgba(0,0,0,.38);
-    display: grid;
-    gap: 4px;
+    position: absolute;
     left: 0;
+    top: calc(100% + 8px);
+    z-index: 30;
     min-width: 220px;
     padding: 8px;
-    position: absolute;
-    top: calc(100% + 8px);
-    z-index: 30
+    display: grid;
+    gap: 4px;
+    background: hsla(0, 0%, 5%, 0.96);
+    border: 1px solid hsla(0, 0%, 100%, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
 }
 
 .akira-season-dd-item {
+    width: 100%;
+    padding: 10px 12px;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    color: #fff;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 10px;
-    color: #fff;
     cursor: pointer;
-    display: flex;
-    gap: 10px;
-    justify-content: space-between;
-    padding: 10px 12px;
-    text-align: left;
-    transition: background .15s ease,border-color .15s ease,transform .08s ease;
-    width: 100%
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.08s ease;
 }
 
 .akira-season-dd-item:hover {
-    background: hsla(0,0%,100%,.06);
-    border-color: hsla(0,0%,100%,.08)
+    background: hsla(0, 0%, 100%, 0.06);
+    border-color: hsla(0, 0%, 100%, 0.08);
 }
 
 .akira-season-dd-item:active {
-    transform: scale(.995)
+    transform: scale(0.995);
 }
 
 .akira-season-dd-item.active {
-    background: linear-gradient(180deg,rgba(37,99,235,.12),hsla(0,0%,100%,.02));
-    border-color: rgba(37,99,235,.35)
+    background: linear-gradient(
+        180deg,
+        rgba(37, 99, 235, 0.12),
+        hsla(0, 0%, 100%, 0.02)
+    );
+    border-color: rgba(37, 99, 235, 0.35);
 }
 
 .akira-season-dd-item-text {
     color: #fff;
     font-size: 13px;
-    font-weight: 600
+    font-weight: 600;
 }
 
 .akira-season-dd-check {
     color: #93c5fd;
     font-size: 13px;
     font-weight: 800;
-    line-height: 1
+    line-height: 1;
 }
 
-.akira-episode-thumb {
-    overflow: hidden;
-    position: relative
-}
+/* =========================================================
+   PREV/NEXT BUTTONS
+   ========================================================= */
 
-.akira-episode-thumb-progress {
-    background: transparent;
-    bottom: 0;
-    height: 4px;
-    left: 0;
-    pointer-events: none;
-    position: absolute;
-    width: 100%;
-    z-index: 2
-}
-
-.akira-episode-thumb-progress-fill {
-    background: var(--akira-grad,linear-gradient(90deg,#00eaff,#2563eb));
-    height: 100%;
-    transition: width .18s ease;
-    width: 0
-}
-
-@media (max-width: 780px) {
-    .akira-season-dd {
-        gap:6px
-    }
-
-    .akira-season-dd-label {
-        font-size: 12px
-    }
-
-    .akira-season-dd-trigger {
-        border-radius: 8px;
-        font-size: 12px;
-        height: 32px;
-        min-width: 74px;
-        padding: 0 8px
-    }
-
-    .akira-season-dd-menu {
-        border-radius: 10px;
-        min-width: 180px;
-        padding: 6px
-    }
-
-    .akira-season-dd-item {
-        border-radius: 8px;
-        padding: 9px 10px
-    }
-
-    .akira-season-dd-item-text {
-        font-size: 12px
-    }
-
-    ;}
-
-.akira-volume:has(.akira-volume-pop.show)>.akira-icon-btn.lg {
-    transform: scale(1.2)
+.akira-episode-step-wrap {
+    position: relative;
+    overflow: visible !important;
 }
 
 .akira-icon-btn.episodeStepBtn {
-    border-radius: 999px
+    border-radius: 999px;
 }
 
 .akira-icon-btn.episodeStepBtn img {
-    height: auto!important;
-    margin-top: 0!important;
-    -o-object-fit: contain;
+    width: 38px !important;
+    height: auto !important;
+    margin-top: 0 !important;
     object-fit: contain;
-    width: 34px!important
 }
 
 .akira-icon-btn.episodeStepBtn:disabled {
-    filter: saturate(.35);
-    opacity: .34;
-    transform: none!important
+    opacity: 0.34;
+    filter: saturate(0.35);
+    transform: none !important;
 }
 
-@media (max-width: 1100px) {
-    .akira-icon-btn.episodeStepBtn img {
-        width:30px!important
-    }
+/* =========================================================
+   GLOBAL OVERLAY (NO TSX) - VISUALMENTE ANCLADO AL CENTER CLUSTER
+   OJO: el nodo no está "dentro" del center-cluster, pero queda alineado
+   por CSS con los botones prev/next.
+   ========================================================= */
+
+.akira-episode-step-overlay-layer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--akira-step-popover-bottom-desktop);
+    height: 0; /* no empuja layout */
+    pointer-events: none;
+    overflow: visible;
+    z-index: 60;
 }
 
-@media (max-width: 780px) {
-    .akira-icon-btn.episodeStepBtn img {
-        width:20px!important
-    }
+.akira-episode-step-popover {
+    position: absolute;
+    bottom: 0; /* misma altura exacta para prev y next */
+    width: min(var(--akira-step-popover-width), calc(100vw - 24px));
+    display: grid;
+    grid-template-columns: var(--akira-step-thumb-width) minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--akira-step-popover-gap);
+    padding: var(--akira-step-popover-pad-y) var(--akira-step-popover-pad-x);
+
+    background: rgba(15, 15, 18, 0.96);
+    border: 1px solid hsla(0, 0%, 100%, 0.1);
+    border-radius: 16px;
+    box-shadow:
+        0 18px 42px rgba(0, 0, 0, 0.5),
+        0 4px 12px rgba(0, 0, 0, 0.28);
+
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    transition: opacity 180ms ease, transform 180ms ease;
+    will-change: transform, opacity;
 }
+
+.akira-episode-step-popover.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* ===== Alineación horizontal respecto al CENTRO del center-cluster =====
+   Toolbar usa 1fr auto 1fr, así que el center-cluster está centrado.
+   Entonces anclamos al 50% del contenedor y aplicamos el offset del botón.
+*/
+
+/* PREV: popover a la izquierda del botón prev */
+.akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
+    right: calc(
+        50% + var(--akira-step-btn-center-offset-desktop) + var(--akira-step-anchor-gap)
+    );
+    left: auto;
+    transform-origin: right bottom;
+}
+
+/* NEXT: popover a la derecha del botón next */
+.akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
+    left: calc(
+        50% + var(--akira-step-btn-center-offset-desktop) + var(--akira-step-anchor-gap)
+    );
+    right: auto;
+    transform-origin: left bottom;
+}
+
+/* =========================================================
+   POPOVER THUMB - 16:9 SI O SI + GRANDE
+   ========================================================= */
+
+.akira-episode-step-popover .akira-episode-nav-thumb {
+    width: 100%;
+    aspect-ratio: 16 / 9 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: hsla(0, 0%, 100%, 0.05);
+    border: 1px solid hsla(0, 0%, 100%, 0.08);
+}
+
+.akira-episode-step-popover .akira-episode-nav-thumb img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    aspect-ratio: 16 / 9;
+}
+
+.akira-episode-step-popover .akira-episode-nav-thumb-empty {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    opacity: 0.75;
+    background: linear-gradient(135deg, #191919, #0f0f0f);
+}
+
+/* =========================================================
+   POPOVER BODY - más aire + sinopsis en BLOCK
+   ========================================================= */
+
+.akira-episode-step-popover .akira-episode-nav-body {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    padding-right: 2px;
+}
+
+.akira-episode-step-popover .akira-episode-nav-kicker {
+    color: hsla(0, 0%, 100%, 0.76);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 1px;
+}
+
+.akira-episode-step-popover .akira-episode-nav-title {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ✅ Sinopsis block (sin webkit-box) */
+.akira-episode-step-popover .akira-episode-nav-synopsis {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    white-space: normal !important;
+
+    -webkit-box-orient: initial !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+
+    color: hsla(0, 0%, 100%, 0.84);
+    font-size: 12px;
+    line-height: 1.38;
+    margin-top: 1px;
+}
+
+/* =========================================================
+   REGLAS LEGACY (si en algún momento usás el overlay/card viejo)
+   ========================================================= */
 
 .akira-episode-nav-overlay {
-    display: grid;
+    position: absolute;
     inset: 0;
-    padding: 16px;
+    z-index: 18;
+    display: grid;
     place-items: center;
     pointer-events: none;
-    position: absolute;
-    z-index: 18
+    padding: 16px;
 }
 
 .akira-episode-nav-card {
+    width: min(760px, calc(100vw - 32px));
+    display: grid;
+    grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
     align-items: center;
+    gap: 14px;
+    padding: 12px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    background: rgba(8,8,8,.84);
-    border: 1px solid hsla(0,0%,100%,.12);
-    border-radius: .35em;
-    box-shadow: 0 12px 34px rgba(0,0,0,.42);
-    display: grid;
-    gap: 14px;
-    grid-template-columns: minmax(140px,190px) minmax(0,1fr);
+    background: rgba(8, 8, 8, 0.84);
+    border: 1px solid hsla(0, 0%, 100%, 0.12);
+    border-radius: 0.35em;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42);
     opacity: 0;
-    padding: 12px;
-    transform: translateY(8px) scale(.985);
-    transition: opacity .18s ease,transform .18s ease;
-    width: min(760px,calc(100vw - 32px))
+    transform: translateY(8px) scale(0.985);
+    transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .akira-episode-nav-card.show {
     opacity: 1;
-    transform: translateY(0) scale(1)
+    transform: translateY(0) scale(1);
 }
 
-.akira-episode-nav-thumb {
-    aspect-ratio: 16/9;
-    background: #0b0c10;
-    border: 1px solid hsla(0,0%,100%,.08);
-    border-radius: .25em;
-    overflow: hidden;
-    width: 100%
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1240px) {
+    .akira-reco-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
 }
 
-.akira-episode-nav-thumb img {
-    display: block;
-    height: 100%;
-    -o-object-fit: cover;
-    object-fit: cover;
-    width: 100%
+@media (max-width: 1100px) {
+    .akira-title {
+        font-size: 32px;
+    }
+
+    .akira-time {
+        min-width: 78px;
+        font-size: 15px;
+    }
+
+    .akira-thumb-image {
+        width: var(--akira-hover-thumb-w-tablet) !important;
+        height: auto !important;
+    }
+
+    .akira-icon-btn.xxl {
+        width: 70px;
+        height: 70px;
+    }
+
+    .akira-icon-btn.xl {
+        width: 56px;
+        height: 56px;
+    }
+
+    .akira-icon-btn.lg {
+        width: 46px;
+        height: 46px;
+    }
+
+    .akira-text-btn {
+        height: 40px;
+        padding: 0 12px;
+        font-size: 13px;
+    }
+
+    .akira-episode-card {
+        grid-template-columns: 200px 1fr;
+    }
+
+    .akira-reco-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .akira-icon-btn.episodeStepBtn img {
+        width: 32px !important;
+    }
+
+    /* Overlay prev/next más compacto */
+    .akira-episode-step-overlay-layer {
+        bottom: var(--akira-step-popover-bottom-tablet);
+    }
+
+    .akira-episode-step-popover {
+        width: min(520px, calc(100vw - 20px));
+        grid-template-columns: 172px minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px;
+    }
+
+    .akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
+        right: calc(
+            50% + var(--akira-step-btn-center-offset-tablet) + var(--akira-step-anchor-gap)
+        );
+    }
+
+    .akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
+        left: calc(
+            50% + var(--akira-step-btn-center-offset-tablet) + var(--akira-step-anchor-gap)
+        );
+    }
+
+    .akira-episode-step-popover .akira-episode-nav-title {
+        font-size: 14px;
+    }
+
+    .akira-episode-step-popover .akira-episode-nav-synopsis {
+        font-size: 12px;
+    }
+
+    .akira-thumb-time {
+        font-size: 14px;
+        padding: 8px 10px;
+    }
 }
 
-.akira-episode-nav-thumb-empty {
-    background: linear-gradient(135deg,#191919,#0f0f0f);
-    color: hsla(0,0%,100%,.55);
-    display: grid;
-    font-size: 12px;
-    height: 100%;
-    place-items: center;
-    width: 100%
-}
+@media (max-width: 900px) {
+    /* Misma altura para ambos, pero más cerca del center cluster en mobile/tablet */
+    .akira-episode-step-overlay-layer {
+        bottom: var(--akira-step-popover-bottom-mobile);
+        height: 0;
+    }
 
-.akira-episode-nav-body {
-    align-content: center;
-    display: grid;
-    gap: 6px;
-    min-width: 0
-}
+    .akira-episode-step-popover {
+        bottom: 0;
+        width: min(420px, calc(100vw - 16px));
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 12px;
+        padding: 10px;
+        border-radius: 14px;
+    }
 
-.akira-episode-nav-kicker {
-    color: #93c5fd;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: .06em;
-    text-transform: uppercase
-}
+    .akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
+        /* En pantallas pequeñas, mejor clamp para no salir */
+        right: clamp(
+            8px,
+            calc(50% + var(--akira-step-btn-center-offset-mobile) + 10px),
+            calc(100vw - 16px)
+        );
+        left: auto;
+    }
 
-.akira-episode-nav-title {
-    color: #fff;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -.01em;
-    line-height: 1.25;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap
-}
+    .akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
+        left: clamp(
+            8px,
+            calc(50% + var(--akira-step-btn-center-offset-mobile) + 10px),
+            calc(100vw - 16px)
+        );
+        right: auto;
+    }
 
-.akira-episode-nav-synopsis {
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    color: hsla(0,0%,100%,.78);
-    display: -webkit-box;
-    font-size: 13px;
-    line-height: 1.35;
-    overflow: hidden
+    .akira-episode-step-popover .akira-episode-nav-thumb {
+        aspect-ratio: 16 / 9 !important;
+        height: auto !important;
+    }
+
+    .akira-episode-step-popover .akira-episode-nav-title {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        font-size: 13px;
+        line-height: 1.25;
+    }
+
+    .akira-episode-step-popover .akira-episode-nav-synopsis {
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    .akira-thumb-image {
+        width: var(--akira-hover-thumb-w-mobile) !important;
+        aspect-ratio: 16 / 9 !important;
+        height: auto !important;
+    }
+
+    .akira-thumb-time {
+        font-size: 11px;
+        padding: 7px 8px;
+    }
 }
 
 @media (max-width: 780px) {
-    .akira-episode-nav-overlay {
-        padding:12px
+    .akira-top-overlay {
+        padding: 14px 14px 20px;
     }
 
-    .akira-episode-nav-card {
-        border-radius: .25em;
-        gap: 10px;
+    .akira-title {
+        font-size: 22px;
+    }
+
+    .akira-channel {
+        margin-bottom: 5px;
+        font-size: 11px;
+    }
+
+    .akira-controls {
+        padding: 10px 12px 14px;
+    }
+
+    .akira-progress-row {
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .akira-time {
+        min-width: 58px;
+        font-size: 12px;
+    }
+
+    .akira-thumb-image {
+        width: var(--akira-hover-thumb-w-mobile) !important;
+        height: auto !important;
+    }
+
+    .akira-thumb-time {
+        font-size: 11px;
+    }
+
+    .akira-toolbar {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .akira-left {
+        order: 1;
+        justify-content: flex-start;
+    }
+
+    .akira-right {
+        order: 2;
+        justify-content: flex-end;
+    }
+
+    .akira-center-cluster {
+        order: 3;
+        justify-content: center;
+    }
+
+    .akira-icon-btn.xxl {
+        width: 58px;
+        height: 58px;
+    }
+
+    .akira-icon-btn.xl {
+        width: 48px;
+        height: 48px;
+    }
+
+    .akira-icon-btn.lg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .akira-icon-btn.xxl img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .akira-icon-btn.xl img {
+        width: 24px;
+        height: 24px;
+    }
+
+    .akira-icon-btn.lg img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .akira-text-btn {
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 0.25em;
+        font-size: 12px;
+    }
+
+    .akira-volume-pop {
+        width: 120px;
+    }
+
+    .akira-menu {
+        bottom: 46px;
+        min-width: 170px;
+    }
+
+    .akira-menu-item {
         padding: 10px;
-        width: calc(100vw - 24px)
+        font-size: 13px;
     }
 
-    .akira-episode-nav-thumb {
-        aspect-ratio: 16/9
+    .akira-modal,
+    .akira-modal-reco {
+        width: calc(100vw - 16px);
+        height: min(86vh, 760px);
     }
 
-    .akira-episode-nav-kicker {
-        font-size: 11px
+    .akira-modal-header {
+        padding: 12px;
     }
 
-    .akira-episode-nav-title {
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
-        display: -webkit-box;
+    .akira-modal-title {
+        font-size: 15px;
+    }
+
+    .akira-modal-close {
+        width: 34px;
+        height: 34px;
+        font-size: 16px;
+    }
+
+    .akira-modal-body {
+        padding: 10px;
+    }
+
+    .akira-episode-card {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .akira-episode-title {
         font-size: 14px;
-        white-space: normal
     }
 
-    .akira-episode-nav-synopsis {
+    .akira-episode-synopsis {
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+        font-size: 12px;
+    }
+
+    .akira-reco-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .akira-reco-card {
+        padding: 8px;
+    }
+
+    .akira-reco-title {
+        font-size: 13px;
+    }
+
+    .akira-reco-synopsis {
         -webkit-line-clamp: 2;
         line-clamp: 2;
-        font-size: 12px
+        font-size: 11px;
+    }
+
+    .akira-season-dd {
+        gap: 6px;
+    }
+
+    .akira-season-dd-label {
+        font-size: 12px;
+    }
+
+    .akira-season-dd-trigger {
+        height: 32px;
+        min-width: 74px;
+        padding: 0 8px;
+        font-size: 12px;
+        border-radius: 8px;
+    }
+
+    .akira-season-dd-menu {
+        min-width: 180px;
+        padding: 6px;
+        border-radius: 10px;
+    }
+
+    .akira-season-dd-item {
+        padding: 9px 10px;
+        border-radius: 8px;
+    }
+
+    .akira-season-dd-item-text {
+        font-size: 12px;
+    }
+
+    .akira-icon-btn.episodeStepBtn img {
+        width: 22px !important;
+    }
+
+    /* Mobile: popovers más chicos pero cómodos y misma altura */
+    .akira-episode-step-overlay-layer {
+        bottom: var(--akira-step-popover-bottom-mobile);
+    }
+
+    .akira-episode-step-popover {
+        width: min(420px, calc(100vw - 12px));
+        grid-template-columns: 132px minmax(0, 1fr);
+        gap: 10px;
+        padding: 10px;
+    }
+
+    /* En mobile extremo, mejor pegarlos a bordes para no romper viewport */
+    .akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
+        right: auto;
+        left: 6px;
+        transform-origin: left bottom;
+    }
+
+    .akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
+        left: auto;
+        right: 6px;
+        transform-origin: right bottom;
     }
 }
 
-.akira-center-cluster .akira-icon-btn.lg img {
-    height: auto!important;
-    margin-top: 1.6em!important;
-    width: 67px!important
+/* =========================================================
+   HARD OVERRIDES PARA ASEGURAR 16:9 SI O SI
+   (por si reglas viejas pisan height)
+   ========================================================= */
+
+.akira-thumb-image,
+.akira-thumb-image img,
+.akira-episode-step-popover .akira-episode-nav-thumb,
+.akira-episode-step-popover .akira-episode-nav-thumb img {
+    max-height: none !important;
 }
 
-/* Capa global del popover prev/next */
-.akira-episode-step-overlay-layer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 190px; /* altura sobre toolbar; ajustar según tu UI */
-  height: 0;    /* la capa no empuja layout */
-  pointer-events: none;
-  z-index: 40;
+/* =========================================================
+   FIX: POPOVERS PREV/NEXT "DENTRO" DEL BOX DE .akira-center-cluster (solo CSS)
+   ========================================================= */
+
+/* Ajustes finos */
+:root {
+  /* Caja visual del center cluster (desktop) */
+  --akira-center-cluster-visual-width: 760px;
+
+  /* Distancia vertical del popover respecto al center-cluster */
+  --akira-step-popover-bottom: 164px;
+
+  /* Tamaño del popover (agrandado) */
+  --akira-step-popover-width: 560px;
+  --akira-step-popover-pad-y: 14px;
+  --akira-step-popover-pad-x: 14px;
+  --akira-step-popover-gap: 14px;
+
+  /* Thumb 16:9 sí o sí */
+  --akira-step-thumb-width: 184px;
+
+  /* Separación horizontal respecto a los bordes del "box" del center-cluster */
+  --akira-step-edge-gap: 6px;
+
+  /* Hover preview timeline 16:9 agrandado */
+  --akira-hover-thumb-width: 336px;
+}
+
+/* Base de toolbar / center-cluster como referencia visual */
+.akira-toolbar {
+  position: relative;
   overflow: visible;
 }
 
-/* Base del popover */
+.akira-center-cluster {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+}
+
+/* ---------------------------------------------------------
+   CAPA GLOBAL DEL OVERLAY:
+   Se centra y se limita al "box visual" del center cluster
+   --------------------------------------------------------- */
+.akira-episode-step-overlay-layer {
+  position: absolute !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%);
+  width: min(var(--akira-center-cluster-visual-width), calc(100vw - 24px));
+  height: 0 !important; /* no empuja layout */
+  bottom: var(--akira-step-popover-bottom) !important;
+  overflow: visible !important;
+  pointer-events: none;
+  z-index: 60;
+}
+
+/* ---------------------------------------------------------
+   POPOVER BASE (agrandado)
+   --------------------------------------------------------- */
 .akira-episode-step-popover {
-  position: absolute;
-  width: min(420px, calc(100vw - 32px));
-  display: grid;
-  grid-template-columns: 132px 1fr;
-  gap: 12px;
+  position: absolute !important;
+  bottom: 0 !important; /* misma altura exacta para prev y next */
+  width: min(var(--akira-step-popover-width), calc(100vw - 24px));
+  height: auto !important;
+
+  display: grid !important;
+  grid-template-columns: var(--akira-step-thumb-width) minmax(0, 1fr);
   align-items: stretch;
+  gap: var(--akira-step-popover-gap);
+  padding: var(--akira-step-popover-pad-y) var(--akira-step-popover-pad-x);
 
-  padding: 10px;
-  border-radius: 14px;
-
-  background: rgba(15, 15, 18, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 15, 18, 0.96);
+  border: 1px solid hsla(0, 0%, 100%, 0.10);
+  border-radius: 16px;
   box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.45),
-    0 2px 8px rgba(0, 0, 0, 0.25);
+    0 18px 42px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.28);
 
   opacity: 0;
-  transform: translateY(8px) scale(0.985);
+  transform: translateY(10px) scale(0.985);
   transition: opacity 180ms ease, transform 180ms ease;
   will-change: transform, opacity;
 }
@@ -1553,109 +1911,257 @@ img.playSVG {
   transform: translateY(0) scale(1);
 }
 
-/* Posición izquierda (prev) */
+/* ---------------------------------------------------------
+   ANCLAJE "DENTRO DEL BOX" DEL CENTER-CLUSTER
+   prev => pegado al lado izquierdo del box
+   next => pegado al lado derecho del box
+   --------------------------------------------------------- */
 .akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
-  left: 42em;
-  transform-origin: center bottom;
+  left: var(--akira-step-edge-gap) !important;
+  right: auto !important;
+  transform-origin: left bottom;
 }
 
-/* Posición derecha (next) */
 .akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
-  right: 45em;
+  right: var(--akira-step-edge-gap) !important;
+  left: auto !important;
   transform-origin: right bottom;
 }
 
-/* Thumb */
-.akira-episode-nav-thumb {
-  width: 132px;
-  height: 74px;
-  border-radius: 10px;
+/* ---------------------------------------------------------
+   THUMB DEL POPOVER - 16:9 SI O SI
+   --------------------------------------------------------- */
+.akira-episode-step-popover .akira-episode-nav-thumb {
+  width: 100% !important;
+  aspect-ratio: 16 / 9 !important;
+  height: auto !important;
+  min-height: 0 !important;
   overflow: hidden;
-  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
+  background: hsla(0, 0%, 100%, 0.05);
+  border: 1px solid hsla(0, 0%, 100%, 0.08);
 }
 
-.akira-episode-nav-thumb img {
+.akira-episode-step-popover .akira-episode-nav-thumb img {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  object-fit: cover !important;
+  aspect-ratio: 16 / 9 !important;
+}
+
+.akira-episode-step-popover .akira-episode-nav-thumb-empty {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Placeholder thumb */
-.akira-episode-nav-thumb-empty {
+  display: grid;
+  place-items: center;
   font-size: 12px;
   opacity: 0.75;
+  background: linear-gradient(135deg, #191919, #0f0f0f);
 }
 
-/* Body */
-.akira-episode-nav-body {
+/* ---------------------------------------------------------
+   BODY DEL POPOVER (más aire)
+   --------------------------------------------------------- */
+.akira-episode-step-popover .akira-episode-nav-body {
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 7px;
+  padding-right: 2px;
 }
 
-.akira-episode-nav-kicker {
+.akira-episode-step-popover .akira-episode-nav-kicker {
+  color: hsla(0, 0%, 100%, 0.76);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.72);
+  margin-top: 1px;
 }
 
-.akira-episode-nav-title {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
+.akira-episode-step-popover .akira-episode-nav-title {
   color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.akira-episode-nav-synopsis {
-  font-size: 12px;
-  line-height: 1.35;
-  color: rgba(255,255,255,0.82);
+/* ✅ Sinopsis block, sin webkit-box */
+.akira-episode-step-popover .akira-episode-nav-synopsis {
+  display: block !important;
+  height: auto !important;
+  overflow: visible !important;
+  white-space: normal !important;
 
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
+  -webkit-box-orient: initial !important;
+
+  color: hsla(0, 0%, 100%, 0.84);
+  font-size: 12px;
+  line-height: 1.38;
+  margin-top: 1px;
 }
 
-/* Asegurar que wrappers no creen stacking raro */
+/* ---------------------------------------------------------
+   HOVER PREVIEW TIMELINE - 16:9 SI O SI + grande
+   --------------------------------------------------------- */
+.akira-thumb-preview {
+  bottom: 34px;
+  z-index: 55;
+}
+
+.akira-thumb-image {
+  width: var(--akira-hover-thumb-width) !important;
+  aspect-ratio: 16 / 9 !important;
+  height: auto !important;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  background: #0b0c10;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.akira-thumb-image img {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  object-fit: cover !important;
+  aspect-ratio: 16 / 9 !important;
+}
+
+.akira-thumb-sprite {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: auto;
+}
+
+.akira-thumb-time {
+  width: 100%;
+  margin-top: -0.45em;
+  padding: 10px 12px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ---------------------------------------------------------
+   Prev/Next buttons (un poco más grandes)
+   --------------------------------------------------------- */
 .akira-episode-step-wrap {
   position: relative;
-  overflow: visible;
+  overflow: visible !important;
 }
 
-/* Mobile/tablet */
+.akira-icon-btn.episodeStepBtn img {
+  width: 38px !important;
+  height: auto !important;
+  margin-top: 0 !important;
+  object-fit: contain;
+}
+
+/* ---------------------------------------------------------
+   Tablet
+   --------------------------------------------------------- */
+@media (max-width: 1100px) {
+  :root {
+    --akira-center-cluster-visual-width: 660px;
+    --akira-step-popover-bottom: 130px;
+    --akira-step-popover-width: 500px;
+    --akira-step-thumb-width: 164px;
+    --akira-step-popover-pad-y: 12px;
+    --akira-step-popover-pad-x: 12px;
+    --akira-step-popover-gap: 12px;
+    --akira-hover-thumb-width: 240px;
+  }
+
+  .akira-episode-step-popover .akira-episode-nav-title {
+    font-size: 14px;
+  }
+
+  .akira-episode-step-popover .akira-episode-nav-synopsis {
+    font-size: 12px;
+  }
+
+  .akira-thumb-time {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+
+  .akira-icon-btn.episodeStepBtn img {
+    width: 32px !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   Mobile / small tablet
+   (mantiene misma altura para ambos)
+   --------------------------------------------------------- */
 @media (max-width: 900px) {
+  :root {
+    --akira-center-cluster-visual-width: 420px;
+    --akira-step-popover-bottom: 92px;
+    --akira-step-popover-width: 400px;
+    --akira-step-thumb-width: 132px;
+    --akira-step-popover-pad-y: 10px;
+    --akira-step-popover-pad-x: 10px;
+    --akira-step-popover-gap: 10px;
+    --akira-hover-thumb-width: 180px;
+    --akira-step-edge-gap: 4px;
+  }
+
   .akira-episode-step-overlay-layer {
-    bottom: 76px;
+    width: min(var(--akira-center-cluster-visual-width), calc(100vw - 12px));
   }
 
   .akira-episode-step-popover {
-    width: min(360px, calc(100vw - 20px));
-    grid-template-columns: 110px 1fr;
-    gap: 10px;
-    padding: 9px;
+    width: min(var(--akira-step-popover-width), calc(100vw - 12px));
+    grid-template-columns: var(--akira-step-thumb-width) minmax(0, 1fr);
+    border-radius: 14px;
   }
 
-  .akira-episode-nav-thumb {
-    width: 110px;
-    height: 62px;
+  .akira-episode-step-popover .akira-episode-nav-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 13px;
+    line-height: 1.25;
   }
 
-  .akira-episode-step-overlay-layer.is-prev .akira-episode-step-popover {
-    left: 10px;
+  .akira-episode-step-popover .akira-episode-nav-synopsis {
+    font-size: 11px;
+    line-height: 1.35;
   }
 
-  .akira-episode-step-overlay-layer.is-next .akira-episode-step-popover {
-    right: 10px;
+  .akira-thumb-image {
+    width: var(--akira-hover-thumb-width) !important;
+    aspect-ratio: 16 / 9 !important;
+    height: auto !important;
   }
+
+  .akira-thumb-time {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+
+  .akira-icon-btn.episodeStepBtn img {
+    width: 22px !important;
+  }
+}
+
+/* Hard overrides anti-reglas viejas */
+.akira-thumb-image,
+.akira-thumb-image img,
+.akira-episode-step-popover .akira-episode-nav-thumb,
+.akira-episode-step-popover .akira-episode-nav-thumb img {
+  max-height: none !important;
 }
