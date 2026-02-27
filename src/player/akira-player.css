@@ -679,7 +679,7 @@
 .akira-text-btn {
     align-items: center;
     background: hsla(0, 0%, 100%, .06);
-    border: 1px solid hsla(0, 0%, 100%, .12);
+    border: none;
     border-radius: 12px;
     color: #fff;
     cursor: pointer;
@@ -694,8 +694,8 @@
 }
 
 .akira-text-btn:hover {
-    background: hsla(0, 0%, 100%, .12);
-    border-color: hsla(0, 0%, 100%, .2);
+    background: #fff;
+    color: #000;
 }
 
 .akira-text-btn:active {

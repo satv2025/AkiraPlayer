@@ -270,6 +270,14 @@ function isStrictEpisodeProgressRowMatch(params: {
     return true;
 }
 
+function isVideoElementPlaybackReady(video: HTMLVideoElement | null | undefined): boolean {
+    if (!video) return false;
+    const hasSource = Boolean(video.currentSrc || video.getAttribute("src"));
+    if (!hasSource) return false;
+    const rs = Number(video.readyState || 0);
+    return rs >= 1; // HAVE_METADATA+
+}
+
 async function loadEpisodesProgressReal(params: {
     contentId: string;
     seasonId?: string | null;
@@ -491,6 +499,11 @@ export function AkiraPlayer({
     const controlsHideTimerRef = useRef<number | null>(null);
     const feedbackTimerRef = useRef<number | null>(null);
 
+    /** ✅ Para handshake con watch.html/watch.js */
+    const handshakePreparingSentKeyRef = useRef<string>("");
+    const handshakeReadySentKeyRef = useRef<string>("");
+    const mediaReadyProbeTimerRef = useRef<number | null>(null);
+
     /** ✅ Para forzar autoplay cuando avanza al siguiente episodio en playlist mode */
     const playlistNextAutoplayRef = useRef(false);
 
@@ -518,6 +531,9 @@ export function AkiraPlayer({
     /** ✅ Boot gate: primero data, después reproducción */
     const [isPlayerBootPreparing, setIsPlayerBootPreparing] = useState(true);
     const [isPlayerBootReady, setIsPlayerBootReady] = useState(false);
+
+    /** ✅ Handshake real de reproducción (video con source + metadata) */
+    const [isMediaHandshakeReady, setIsMediaHandshakeReady] = useState(false);
 
     /** ✅ título/categoría reales desde movies */
     const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
@@ -677,6 +693,15 @@ export function AkiraPlayer({
         });
     }, [contentId, seasonId, episodes]);
 
+    /** ✅ Firma de handshake por contenido/episodio/src (alineada con watch.html) */
+    const playbackHandshakeKey = useMemo(() => {
+        return JSON.stringify({
+            contentId: String(contentId || ""),
+            episodeId: episodeId ?? null,
+            src: String(src || "")
+        });
+    }, [contentId, episodeId, src]);
+
     const hydrateEpisodesModalData = useCallback(
         async (opts?: { force?: boolean; silent?: boolean }) => {
             const force = Boolean(opts?.force);
@@ -756,17 +781,130 @@ export function AkiraPlayer({
         }
     };
 
-    // ✅ Evento custom para handshake con watch.html/watch.js (robusto)
+    // ✅ Reset del handshake de media cuando cambia el ciclo de reproducción
+    useEffect(() => {
+        setIsMediaHandshakeReady(false);
+
+        if (mediaReadyProbeTimerRef.current) {
+            window.clearTimeout(mediaReadyProbeTimerRef.current);
+            mediaReadyProbeTimerRef.current = null;
+        }
+    }, [playbackHandshakeKey]);
+
+    // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+
+        if (!isPlayerBootReady) return;
+        if (!src) return;
+
+        let cancelled = false;
+
+        const markReadyIfApplies = (reason: string) => {
+            if (cancelled) return;
+            if (!isPlayerBootReady) return;
+
+            const ready = isVideoElementPlaybackReady(v);
+            if (!ready) return;
+
+            setIsMediaHandshakeReady((prev) => {
+                if (!prev) {
+                    console.log("[AkiraPlayer][handshake] media ready", {
+                        reason,
+                        contentId,
+                        episodeId,
+                        src,
+                        currentSrc: v.currentSrc || null,
+                        readyState: v.readyState,
+                        networkState: v.networkState
+                    });
+                }
+                return true;
+            });
+        };
+
+        const onLoadedMetadata = () => markReadyIfApplies("loadedmetadata");
+        const onLoadedData = () => markReadyIfApplies("loadeddata");
+        const onCanPlay = () => markReadyIfApplies("canplay");
+        const onPlaying = () => markReadyIfApplies("playing");
+        const onDurationChange = () => markReadyIfApplies("durationchange");
+        const onProgress = () => markReadyIfApplies("progress");
+        const onError = () => {
+            console.warn("[AkiraPlayer][handshake] video error antes de media-ready", {
+                contentId,
+                episodeId,
+                src,
+                currentSrc: v.currentSrc || null,
+                readyState: v.readyState,
+                networkState: v.networkState,
+                mediaError: v.error ? { code: v.error.code, message: v.error.message || null } : null
+            });
+        };
+
+        // chequeo inmediato + micro delay (Hls attach/load puede completar justo después)
+        markReadyIfApplies("effect-start");
+        mediaReadyProbeTimerRef.current = window.setTimeout(() => {
+            markReadyIfApplies("effect-probe-t+80ms");
+        }, 80);
+
+        v.addEventListener("loadedmetadata", onLoadedMetadata);
+        v.addEventListener("loadeddata", onLoadedData);
+        v.addEventListener("canplay", onCanPlay);
+        v.addEventListener("playing", onPlaying);
+        v.addEventListener("durationchange", onDurationChange);
+        v.addEventListener("progress", onProgress);
+        v.addEventListener("error", onError);
+
+        return () => {
+            cancelled = true;
+
+            if (mediaReadyProbeTimerRef.current) {
+                window.clearTimeout(mediaReadyProbeTimerRef.current);
+                mediaReadyProbeTimerRef.current = null;
+            }
+
+            v.removeEventListener("loadedmetadata", onLoadedMetadata);
+            v.removeEventListener("loadeddata", onLoadedData);
+            v.removeEventListener("canplay", onCanPlay);
+            v.removeEventListener("playing", onPlaying);
+            v.removeEventListener("durationchange", onDurationChange);
+            v.removeEventListener("progress", onProgress);
+            v.removeEventListener("error", onError);
+        };
+    }, [isPlayerBootReady, src, contentId, episodeId, playbackHandshakeKey]);
+
+    // ✅ Evento custom para handshake con watch.html/watch.js (robusto y real)
     useEffect(() => {
         if (typeof window === "undefined") return;
 
-        if (isPlayerBootPreparing) {
-            const detail = {
-                contentId: contentId ?? null,
-                episodeId: episodeId ?? null,
-                src: src ?? null,
-                at: Date.now()
-            };
+        const v = videoRef.current;
+
+        const detail = {
+            contentId: contentId ?? null,
+            episodeId: episodeId ?? null,
+            src: src ?? null,
+            at: Date.now(),
+            bootPreparing: isPlayerBootPreparing,
+            bootReady: isPlayerBootReady,
+            mediaReady: isMediaHandshakeReady,
+            video: v
+                ? {
+                      currentSrc: v.currentSrc || null,
+                      srcAttr: v.getAttribute("src"),
+                      readyState: v.readyState,
+                      networkState: v.networkState
+                  }
+                : null
+        };
+
+        const shouldEmitReady = isPlayerBootReady && isMediaHandshakeReady;
+        const shouldEmitPreparing = !shouldEmitReady;
+
+        if (shouldEmitPreparing) {
+            if (handshakePreparingSentKeyRef.current === playbackHandshakeKey) return;
+
+            handshakePreparingSentKeyRef.current = playbackHandshakeKey;
 
             try {
                 (window as any).__SATV_AKIRA_LAST_PREPARING_EVENT__ = detail;
@@ -781,16 +919,14 @@ export function AkiraPlayer({
             } catch {
                 // noop
             }
+
             return;
         }
 
-        if (isPlayerBootReady) {
-            const detail = {
-                contentId: contentId ?? null,
-                episodeId: episodeId ?? null,
-                src: src ?? null,
-                at: Date.now()
-            };
+        if (shouldEmitReady) {
+            if (handshakeReadySentKeyRef.current === playbackHandshakeKey) return;
+
+            handshakeReadySentKeyRef.current = playbackHandshakeKey;
 
             try {
                 (window as any).__SATV_AKIRA_LAST_READY_EVENT__ = detail;
@@ -806,7 +942,15 @@ export function AkiraPlayer({
                 // noop
             }
         }
-    }, [isPlayerBootPreparing, isPlayerBootReady, contentId, episodeId, src]);
+    }, [
+        isPlayerBootPreparing,
+        isPlayerBootReady,
+        isMediaHandshakeReady,
+        contentId,
+        episodeId,
+        src,
+        playbackHandshakeKey
+    ]);
 
     // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
@@ -1360,6 +1504,7 @@ export function AkiraPlayer({
         return () => {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
             if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+            if (mediaReadyProbeTimerRef.current) window.clearTimeout(mediaReadyProbeTimerRef.current);
         };
     }, []);
 
@@ -1600,8 +1745,8 @@ export function AkiraPlayer({
                 ))}
             </video>
 
-            {/* BOOT OVERLAY: prepara data antes de arrancar el repro */}
-            {isPlayerBootPreparing && (
+            {/* OVERLAY de preparación real (boot + media) */}
+            {(!isPlayerBootReady || !isMediaHandshakeReady) && (
                 <div className="akira-overlay-shell" aria-hidden="true">
                     <div className="akira-empty-state">Preparando reproducción...</div>
                 </div>
@@ -2066,7 +2211,7 @@ export function AkiraPlayer({
                             }}
                             title="Episodios"
                             aria-label="Episodios"
-                            disabled={!hasEpisodes || isEpisodesModalPreparing || isPlayerBootPreparing}
+                            disabled={!hasEpisodes || isEpisodesModalPreparing || !isPlayerBootReady}
                         >
                             {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
                             {hasEpisodes ? (
