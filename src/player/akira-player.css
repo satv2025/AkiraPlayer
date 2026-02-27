@@ -709,6 +709,11 @@
     transition: background .15s ease, opacity .15s ease, transform .08s ease
 }
 
+.akira-back-btn {
+    padding-bottom: 0.5em;
+    padding-right: 0.3em;
+}
+
 .akira-volume:has(.akira-volume-pop.show)>button,
 .akira-volume>button:hover {
     background: hsla(0, 0%, 100%, .1);
