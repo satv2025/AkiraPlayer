@@ -46,13 +46,13 @@ type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string; // nombre de peli/serie actual (compat)
+    title?: string; // puede venir mal (ej. "Episodio 2"), se hidrata desde movies por contentId
     channelLabel?: string;
 
     assetBase?: string;
     assetBaseUrl?: string;
 
-    contentId: string; // ID de serie o peli abierta
+    contentId: string; // ID de serie o peli abierta (UUID de movies.id)
     seasonId?: string | null;
     episodeId?: string | null;
 
@@ -85,6 +85,12 @@ type EpisodesThumbDbRow = {
     thumbnails_episode?: string | null;
     thumbnailEpisode?: string | null;
     thumbnail?: string | null;
+};
+
+type MovieTitleDbRow = {
+    id?: string | null;
+    title?: string | null;
+    category?: string | null;
 };
 
 type FeedbackState = { text: string; visible: boolean } | null;
@@ -314,6 +320,41 @@ async function loadEpisodeThumbsFromSupabase(params: {
     return result;
 }
 
+/** ✅ Título real de la serie/película desde public.movies por UUID */
+async function loadContentTitleFromMovies(params: {
+    contentId: string;
+}): Promise<{ title: string | null; category: string | null }> {
+    const { contentId } = params;
+    if (!contentId) return { title: null, category: null };
+
+    const moviesTable = String((CONFIG as any)?.MOVIES_TABLE || "movies");
+
+    try {
+        const { data, error } = await (supabase as any)
+            .from(moviesTable)
+            .select("id,title,category")
+            .eq("id", contentId)
+            .maybeSingle();
+
+        if (error) {
+            console.warn("[AkiraPlayer] Error leyendo title desde movies:", error);
+            return { title: null, category: null };
+        }
+
+        const row = (data || null) as MovieTitleDbRow | null;
+        const title = row?.title ? String(row.title).trim() : null;
+        const category = row?.category ? String(row.category).trim() : null;
+
+        return {
+            title: title && title.length ? title : null,
+            category: category && category.length ? category : null
+        };
+    } catch (e) {
+        console.warn("[AkiraPlayer] Excepción leyendo title desde movies:", e);
+        return { title: null, category: null };
+    }
+}
+
 export function AkiraPlayer({
     src,
     poster,
@@ -367,6 +408,10 @@ export function AkiraPlayer({
 
     const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<string, EpisodeProgressInfo>>({});
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
+
+    /** ✅ título/categoría reales desde movies */
+    const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
+    const [contentCategoryFromDb, setContentCategoryFromDb] = useState<string | null>(null);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -428,22 +473,40 @@ export function AkiraPlayer({
         setShowSeasonDropdown(false);
     };
 
-    const isSeriesContext = useMemo(() => {
-        if (typeof window === "undefined") return Boolean(episodeId);
-        try {
-            const sp = new URLSearchParams(window.location.search);
-            if (sp.has("series")) return true;
-            if (sp.has("movie")) return false;
-        } catch {
-            // noop
-        }
-        return Boolean(episodeId);
-    }, [episodeId]);
-
     const currentEpisodeData = useMemo(() => {
         if (!episodeId) return null;
         return episodes.find((ep) => ep.id === episodeId) ?? null;
     }, [episodes, episodeId]);
+
+    const isSeriesContext = useMemo(() => {
+        // prioridad 1: categoría real desde movies (si ya cargó)
+        if (contentCategoryFromDb === "series") return true;
+        if (contentCategoryFromDb === "movie") return false;
+
+        // prioridad 2: URL actual
+        if (typeof window !== "undefined") {
+            try {
+                const sp = new URLSearchParams(window.location.search);
+                if (sp.has("series")) return true;
+                if (sp.has("movie")) return false;
+            } catch {
+                // noop
+            }
+        }
+
+        // fallback
+        return Boolean(episodeId);
+    }, [contentCategoryFromDb, episodeId]);
+
+    const displayContentTitle = useMemo(() => {
+        const dbTitle = (contentTitleFromDb || "").trim();
+        if (dbTitle) return dbTitle;
+
+        const propTitle = (title || "").trim();
+        if (propTitle) return propTitle;
+
+        return "AkiraPlayer";
+    }, [contentTitleFromDb, title]);
 
     const topMetaEpisodeLine = useMemo(() => {
         if (!isSeriesContext) return "";
@@ -485,6 +548,32 @@ export function AkiraPlayer({
             );
         }
     };
+
+    // ✅ Hidratar título real desde movies por UUID (contentId)
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            if (!contentId) {
+                if (!cancelled) {
+                    setContentTitleFromDb(null);
+                    setContentCategoryFromDb(null);
+                }
+                return;
+            }
+
+            const { title: movieTitle, category } = await loadContentTitleFromMovies({ contentId });
+
+            if (!cancelled) {
+                setContentTitleFromDb(movieTitle);
+                setContentCategoryFromDb(category);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [contentId]);
 
     // HLS setup
     useEffect(() => {
@@ -1270,7 +1359,7 @@ export function AkiraPlayer({
 
                     {/* Meta debajo del back button (sin prefijo "Pelicula"/"Serie") */}
                     <div className="akira-top-meta" aria-live="polite">
-                        <div className="akira-title">{title}</div>
+                        <div className="akira-title">{displayContentTitle}</div>
 
                         {isSeriesContext && topMetaEpisodeLine ? (
                             <div
