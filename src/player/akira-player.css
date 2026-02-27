@@ -1,17 +1,15 @@
-@import url("https://satvplus.com.ar/css/fonts/hbomaxsans/hbomaxsans.css");
-
-:root {
-    --akira-grad: linear-gradient(90deg, #00eaff, #2563eb);
-    --akira-track: hsla(0, 0%, 100%, .24);
-    --akira-track-strong: hsla(0, 0%, 100%, .4);
+@import url("https://satvplus.com.ar/css/fonts/hbomaxsans/hbomaxsans.css");:root {
+    --akira-grad: linear-gradient(90deg,#00eaff,#2563eb);
+    --akira-track: hsla(0,0%,100%,.24);
+    --akira-track-strong: hsla(0,0%,100%,.4);
     --akira-thumb-blue: #2563eb;
     --akira-volume-percent: 100%;
-    --akira-progress-bleed: 4px;
+    --akira-progress-bleed: 4px
 }
 
 * {
     box-sizing: border-box;
-    font-family: HBOMaxSans !important;
+    font-family: HBOMaxSans!important
 }
 
 .akira-wrap {
@@ -22,13 +20,12 @@
     position: relative;
     -moz-user-select: none;
     user-select: none;
-    -webkit-user-select: none;
+    -webkit-user-select: none
 }
 
-.akira-video,
-.akira-wrap {
+.akira-video,.akira-wrap {
     background: #000;
-    width: 100%;
+    width: 100%
 }
 
 .akira-video {
@@ -37,7 +34,7 @@
     height: 100vh;
     max-height: 100%;
     -o-object-fit: contain;
-    object-fit: contain;
+    object-fit: contain
 }
 
 .akira-gesture-layer {
@@ -46,7 +43,7 @@
     inset: 0;
     pointer-events: none;
     position: absolute;
-    z-index: 2;
+    z-index: 2
 }
 
 .akira-gesture-zone {
@@ -56,16 +53,16 @@
     margin: 0;
     opacity: 0;
     padding: 0;
-    pointer-events: auto;
+    pointer-events: auto
 }
 
 .akira-gesture-zone.center {
-    cursor: pointer;
+    cursor: pointer
 }
 
 .akira-top-overlay {
     align-items: flex-start;
-    background: linear-gradient(180deg, rgba(0, 0, 0, .86), rgba(0, 0, 0, .38), transparent);
+    background: linear-gradient(180deg,rgba(0,0,0,.86),rgba(0,0,0,.38),transparent);
     display: flex;
     justify-content: flex-start;
     left: 0;
@@ -75,16 +72,16 @@
     right: 0;
     top: 0;
     transition: opacity .2s ease;
-    z-index: 11;
+    z-index: 11
 }
 
 .akira-top-left {
-    pointer-events: auto;
+    pointer-events: auto
 }
 
 .akira-top-meta {
     min-width: 0;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .akira-channel {
@@ -93,7 +90,7 @@
     letter-spacing: .1em;
     margin-bottom: 8px;
     opacity: .82;
-    text-transform: uppercase;
+    text-transform: uppercase
 }
 
 .akira-title {
@@ -101,7 +98,7 @@
     font-weight: 800;
     letter-spacing: -.02em;
     line-height: 1.05;
-    text-shadow: 0 2px 16px rgba(0, 0, 0, .45);
+    text-shadow: 0 2px 16px rgba(0,0,0,.45)
 }
 
 .akira-back-btn {
@@ -109,7 +106,7 @@
     font-size: 24px;
     height: 48px;
     line-height: 1;
-    width: 48px;
+    width: 48px
 }
 
 .akira-feedback {
@@ -118,66 +115,66 @@
     pointer-events: none;
     position: absolute;
     top: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%,-50%);
     transition: opacity .15s ease;
-    z-index: 14;
+    z-index: 14
 }
 
 .akira-feedback.show {
-    opacity: 0;
+    opacity: 0
 }
 
 .akira-feedback-pill {
-    background: rgba(0, 0, 0, .78);
-    border: 1px solid hsla(0, 0%, 100%, .16);
+    background: rgba(0,0,0,.78);
+    border: 1px solid hsla(0,0%,100%,.16);
     border-radius: 999px;
     font-size: 16px;
     font-weight: 700;
-    padding: 14px 18px;
+    padding: 14px 18px
 }
 
 .akira-overlay-shell {
-    background: rgba(0, 0, 0, .42);
+    background: rgba(0,0,0,.42);
     inset: 0;
     position: absolute;
-    z-index: 15;
+    z-index: 15
 }
 
 .akira-modal {
-    background: hsla(0, 0%, 5%, .96);
-    border: 1px solid hsla(0, 0%, 100%, .08);
+    background: hsla(0,0%,5%,.96);
+    border: 1px solid hsla(0,0%,100%,.08);
     border-radius: .25em;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, .38);
+    box-shadow: 0 12px 34px rgba(0,0,0,.38);
     display: grid;
     grid-template-rows: auto 1fr;
-    height: min(78vh, 760px);
+    height: min(78vh,760px);
     left: 50%;
     overflow: hidden;
     position: absolute;
     top: 50%;
-    transform: translate(-50%, -50%);
-    width: min(1100px, calc(100vw - 32px));
-    z-index: 16;
+    transform: translate(-50%,-50%);
+    width: min(1100px,calc(100vw - 32px));
+    z-index: 16
 }
 
 .akira-modal-reco {
-    height: min(82vh, 820px);
-    width: min(1200px, calc(100vw - 32px));
+    height: min(82vh,820px);
+    width: min(1200px,calc(100vw - 32px))
 }
 
 .akira-modal-header {
     align-items: center;
-    border-bottom: 1px solid hsla(0, 0%, 100%, .08);
+    border-bottom: 1px solid hsla(0,0%,100%,.08);
     display: flex;
     gap: 12px;
     justify-content: space-between;
-    padding: 14px;
+    padding: 14px
 }
 
 .akira-modal-title {
     font-size: 18px;
     font-weight: 700;
-    letter-spacing: -.02em;
+    letter-spacing: -.02em
 }
 
 .akira-modal-close {
@@ -189,43 +186,43 @@
     font-size: 18px;
     height: 38px;
     line-height: 1;
-    transition: background .15s ease, transform .08s ease;
-    width: 38px;
+    transition: background .15s ease,transform .08s ease;
+    width: 38px
 }
 
 .akira-modal-close:hover {
-    background: hsla(0, 0%, 100%, .1);
+    background: hsla(0,0%,100%,.1)
 }
 
 .akira-modal-close:active {
-    transform: scale(.97);
+    transform: scale(.97)
 }
 
 .akira-modal-body {
     overflow: auto;
-    padding: 12px;
+    padding: 12px
 }
 
 .akira-empty-state {
-    border: 1px dashed hsla(0, 0%, 100%, .12);
+    border: 1px dashed hsla(0,0%,100%,.12);
     border-radius: 12px;
-    color: hsla(0, 0%, 100%, .72);
+    color: hsla(0,0%,100%,.72);
     display: grid;
     font-size: 14px;
     min-height: 180px;
     padding: 16px;
     place-items: center;
-    text-align: center;
+    text-align: center
 }
 
 .akira-episode-list {
     display: grid;
-    gap: 10px;
+    gap: 10px
 }
 
 .akira-episode-card {
-    background: hsla(0, 0%, 100%, .02);
-    border: 1px solid hsla(0, 0%, 100%, .06);
+    background: hsla(0,0%,100%,.02);
+    border: 1px solid hsla(0,0%,100%,.06);
     border-radius: .25em;
     color: #fff;
     cursor: pointer;
@@ -234,32 +231,30 @@
     grid-template-columns: 220px 1fr;
     padding: 10px;
     text-align: left;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
-    width: 100%;
+    transition: background .15s ease,border-color .15s ease,transform .08s ease;
+    width: 100%
 }
 
 .akira-episode-card:hover {
-    background: hsla(0, 0%, 100%, .05);
-    border-color: hsla(0, 0%, 100%, .14);
+    background: hsla(0,0%,100%,.05);
+    border-color: hsla(0,0%,100%,.14)
 }
 
 .akira-episode-card:active {
-    transform: scale(.998);
+    transform: scale(.998)
 }
 
 .akira-episode-card.current {
-    background: linear-gradient(180deg, rgba(37, 99, 235, .12), hsla(0, 0%, 100%, .02));
-    border-color: rgba(37, 99, 235, .65);
-    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .25);
+    background: linear-gradient(180deg,rgba(37,99,235,.12),hsla(0,0%,100%,.02));
+    border-color: rgba(37,99,235,.65);
+    box-shadow: inset 0 0 0 1px rgba(37,99,235,.25)
 }
 
 .akira-episode-thumb {
     aspect-ratio: 16/9;
     background: #0b0c10;
     border-radius: .25em;
-    overflow: hidden;
-    position: relative;
-    width: 100%;
+    width: 100%
 }
 
 .akira-episode-thumb img {
@@ -267,28 +262,28 @@
     height: 100%;
     -o-object-fit: cover;
     object-fit: cover;
-    width: 100%;
+    width: 100%
 }
 
 .akira-episode-badge {
-    background: rgba(0, 0, 0, .72);
-    border: 1px solid hsla(0, 0%, 100%, .12);
+    background: rgba(0,0,0,.72);
+    border: 1px solid hsla(0,0%,100%,.12);
     border-radius: 999px;
     bottom: 8px;
+    display: none;
     font-size: 11px;
     font-weight: 700;
     left: 8px;
     letter-spacing: .04em;
     padding: 5px 8px;
-    position: absolute;
-    display: none;
+    position: absolute
 }
 
 .akira-episode-info {
     align-content: start;
     display: grid;
     gap: 7px;
-    min-width: 0;
+    min-width: 0
 }
 
 .akira-episode-title-row {
@@ -296,56 +291,56 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    min-width: 0;
+    min-width: 0
 }
 
 .akira-episode-title {
     font-size: 16px;
     font-weight: 700;
     letter-spacing: -.01em;
-    line-height: 1.25;
+    line-height: 1.25
 }
 
 .akira-episode-current-pill {
     align-items: center;
-    background: rgba(37, 99, 235, .18);
-    border: 1px solid rgba(37, 99, 235, .55);
+    background: rgba(37,99,235,.18);
+    border: 1px solid rgba(37,99,235,.55);
     border-radius: 999px;
     color: #dbeafe;
     display: inline-flex;
     font-size: 11px;
     font-weight: 700;
     padding: 4px 8px;
-    white-space: nowrap;
+    white-space: nowrap
 }
 
 .akira-episode-synopsis {
     -webkit-line-clamp: 3;
     line-clamp: 3;
     -webkit-box-orient: vertical;
-    color: hsla(0, 0%, 100%, .78);
+    color: hsla(0,0%,100%,.78);
     display: -webkit-box;
     font-size: 13px;
     line-height: 1.38;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .akira-episode-meta {
-    color: hsla(0, 0%, 100%, .62);
+    color: hsla(0,0%,100%,.62);
     font-size: 12px;
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums
 }
 
 .akira-reco-grid {
     display: grid;
     gap: 12px;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(5,minmax(0,1fr))
 }
 
 .akira-reco-card {
     align-content: start;
-    background: hsla(0, 0%, 100%, .02);
-    border: 1px solid hsla(0, 0%, 100%, .06);
+    background: hsla(0,0%,100%,.02);
+    border: 1px solid hsla(0,0%,100%,.06);
     border-radius: .25em;
     color: #fff;
     cursor: pointer;
@@ -353,16 +348,16 @@
     gap: 8px;
     padding: 10px;
     text-align: left;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+    transition: background .15s ease,border-color .15s ease,transform .08s ease
 }
 
 .akira-reco-card:hover {
-    background: hsla(0, 0%, 100%, .05);
-    border-color: hsla(0, 0%, 100%, .14);
+    background: hsla(0,0%,100%,.05);
+    border-color: hsla(0,0%,100%,.14)
 }
 
 .akira-reco-card:active {
-    transform: scale(.99);
+    transform: scale(.99)
 }
 
 .akira-reco-poster {
@@ -371,7 +366,7 @@
     border-radius: .25em;
     overflow: hidden;
     position: relative;
-    width: 100%;
+    width: 100%
 }
 
 .akira-reco-poster img {
@@ -379,12 +374,12 @@
     height: 100%;
     -o-object-fit: cover;
     object-fit: cover;
-    width: 100%;
+    width: 100%
 }
 
 .akira-reco-type {
-    background: rgba(0, 0, 0, .72);
-    border: 1px solid hsla(0, 0%, 100%, .12);
+    background: rgba(0,0,0,.72);
+    border: 1px solid hsla(0,0%,100%,.12);
     border-radius: 999px;
     font-size: 10px;
     font-weight: 700;
@@ -392,7 +387,7 @@
     letter-spacing: .04em;
     padding: 4px 7px;
     position: absolute;
-    top: 8px;
+    top: 8px
 }
 
 .akira-reco-title {
@@ -400,56 +395,54 @@
     line-clamp: 2;
     font-size: 14px;
     font-weight: 700;
-    line-height: 1.28;
+    line-height: 1.28
 }
 
-.akira-reco-synopsis,
-.akira-reco-title {
+.akira-reco-synopsis,.akira-reco-title {
     -webkit-box-orient: vertical;
     display: -webkit-box;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .akira-reco-synopsis {
     -webkit-line-clamp: 3;
     line-clamp: 3;
-    color: hsla(0, 0%, 100%, .72);
+    color: hsla(0,0%,100%,.72);
     font-size: 12px;
-    line-height: 1.32;
+    line-height: 1.32
 }
 
 .akira-controls {
-    background: linear-gradient(0deg, rgba(0, 0, 0, .9), rgba(0, 0, 0, .5), transparent);
+    background: linear-gradient(0deg,rgba(0,0,0,.9),rgba(0,0,0,.5),transparent);
     bottom: 0;
     left: 0;
     padding: 14px 20px 18px;
     position: absolute;
     right: 0;
-    transition: opacity .2s ease, transform .2s ease;
-    z-index: 12;
+    transition: opacity .2s ease,transform .2s ease;
+    z-index: 12
 }
 
 .akira-wrap.controls-hidden .akira-controls {
     opacity: 0;
     pointer-events: none;
-    transform: translateY(10px);
+    transform: translateY(10px)
 }
 
 .akira-wrap.controls-hidden .akira-top-overlay {
-    opacity: 0;
+    opacity: 0
 }
 
-.akira-wrap.controls-visible .akira-controls,
-.akira-wrap.controls-visible .akira-top-overlay {
-    opacity: 1;
+.akira-wrap.controls-visible .akira-controls,.akira-wrap.controls-visible .akira-top-overlay {
+    opacity: 1
 }
 
 .akira-progress-row {
     align-items: center;
     display: grid;
-    gap: 0px;
+    gap: 0;
     grid-template-columns: auto 1fr auto;
-    margin-bottom: 16px;
+    margin-bottom: 16px
 }
 
 .akira-time {
@@ -458,7 +451,7 @@
     font-weight: 500;
     min-width: 75px;
     opacity: 1;
-    text-align: center;
+    text-align: center
 }
 
 .akira-progress-wrap {
@@ -467,7 +460,7 @@
     height: 28px;
     min-width: 0;
     overflow: visible;
-    position: relative;
+    position: relative
 }
 
 .akira-progress-visual {
@@ -478,31 +471,29 @@
     position: absolute;
     right: calc(var(--akira-progress-bleed)*0);
     transition: height .12s ease;
-    width: auto;
+    width: auto
 }
 
-.akira-progress-buffered,
-.akira-progress-played,
-.akira-progress-track {
+.akira-progress-buffered,.akira-progress-played,.akira-progress-track {
     bottom: 0;
     left: 0;
     position: absolute;
-    top: 0;
+    top: 0
 }
 
 .akira-progress-track {
-    background: hsla(0, 0%, 100%, .24);
-    right: 0;
+    background: hsla(0,0%,100%,.24);
+    right: 0
 }
 
 .akira-progress-buffered {
-    background: hsla(0, 0%, 100%, .4);
-    width: 0;
+    background: hsla(0,0%,100%,.4);
+    width: 0
 }
 
 .akira-progress-played {
-    background: linear-gradient(90deg, #00eaff, #2563eb);
-    width: 0;
+    background: linear-gradient(90deg,#00eaff,#2563eb);
+    width: 0
 }
 
 .akira-progress {
@@ -517,20 +508,19 @@
     opacity: 1;
     position: relative;
     width: calc(100% + var(--akira-progress-bleed)*2);
-    z-index: 2;
+    z-index: 2
 }
 
 .akira-progress::-webkit-slider-runnable-track {
     background: transparent;
     border: 0;
-    height: 28px;
+    height: 28px
 }
 
-.akira-progress::-moz-range-progress,
-.akira-progress::-moz-range-track {
+.akira-progress::-moz-range-progress,.akira-progress::-moz-range-track {
     background: transparent;
     border: 0;
-    height: 28px;
+    height: 28px
 }
 
 .akira-progress::-webkit-slider-thumb {
@@ -542,15 +532,11 @@
     height: 18px;
     margin-top: 4.89px;
     opacity: 1;
-    width: 18px;
+    width: 18px
 }
 
 .akira-progress-wrap:hover .akira-progress-visual {
-    height: 8px;
-}
-
-.akira-progress-wrap:hover .akira-progress::-webkit-slider-thumb {
-    opacity: 1;
+    height: 8px
 }
 
 .akira-progress::-moz-range-thumb {
@@ -559,46 +545,42 @@
     border-radius: 999px;
     height: 18px;
     opacity: 1;
-    width: 18px;
+    width: 18px
 }
 
-.akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
-    opacity: 1;
-}
-
-/* (Opcional pero recomendado) para que anime suave */
 .akira-progress::-webkit-slider-thumb {
-    transition: width .12s ease, height .12s ease, margin-top .12s ease;
+    -webkit-transition: width .12s ease,height .12s ease,margin-top .12s ease;
+    transition: width .12s ease,height .12s ease,margin-top .12s ease
 }
 
 .akira-progress::-moz-range-thumb {
-    transition: width .12s ease, height .12s ease;
+    -moz-transition: width .12s ease,height .12s ease;
+    transition: width .12s ease,height .12s ease
 }
 
-/* Hover del progress: agrandar thumb */
 .akira-progress-wrap:hover .akira-progress::-webkit-slider-thumb {
-    width: 22px;
     height: 22px;
-    margin-top: 3px; /* ajustado para centrar en track de 28px */
+    margin-top: 3px;
     opacity: 1;
+    width: 22px
 }
 
 .akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
-    width: 22px;
     height: 22px;
     opacity: 1;
+    width: 22px
 }
 
 .akira-thumb-preview {
     align-items: center;
     bottom: 30px;
-    display: flex !important;
+    display: flex!important;
     flex-direction: column;
     gap: 8px;
     pointer-events: none;
     position: absolute;
     transform: translateX(-50%);
-    z-index: 10;
+    z-index: 10
 }
 
 .akira-thumb-image {
@@ -608,7 +590,7 @@
     height: 162px;
     justify-content: center;
     overflow: hidden;
-    width: 288px;
+    width: 288px
 }
 
 .akira-thumb-image img {
@@ -616,18 +598,18 @@
     height: 100%;
     -o-object-fit: cover;
     object-fit: cover;
-    width: 100%;
+    width: 100%
 }
 
 .akira-thumb-sprite {
     background-repeat: no-repeat;
-    image-rendering: auto;
+    image-rendering: auto
 }
 
 .akira-thumb-empty {
-    background: linear-gradient(135deg, #191919, #0f0f0f);
+    background: linear-gradient(135deg,#191919,#0f0f0f);
     height: 100%;
-    width: 100%;
+    width: 100%
 }
 
 .akira-thumb-time {
@@ -638,7 +620,7 @@
     margin-top: -.6em;
     padding: 8px 10px;
     text-align: center;
-    width: 100%;
+    width: 100%
 }
 
 .akira-toolbar {
@@ -646,18 +628,18 @@
     display: grid;
     gap: 14px;
     grid-template-columns: 1fr auto 1fr;
-    margin-top: -.7em;
+    margin-top: -.7em
 }
 
 .akira-left {
     align-items: center;
     display: flex;
+    flex-direction: row-reverse;
     flex-wrap: wrap;
     gap: 10px;
     justify-self: start;
-    min-width: 0;
-    flex-direction: row-reverse;
     margin-left: 1.3em;
+    min-width: 0
 }
 
 .akira-center-cluster {
@@ -665,7 +647,7 @@
     display: flex;
     gap: 12px;
     justify-content: center;
-    justify-self: center;
+    justify-self: center
 }
 
 .akira-right {
@@ -673,12 +655,12 @@
     display: flex;
     gap: 10px;
     justify-self: end;
-    margin-right: 0.5em;
+    margin-right: .5em
 }
 
 .akira-text-btn {
     align-items: center;
-    background: hsla(0, 0%, 100%, .06);
+    background: hsla(0,0%,100%,.06);
     border: none;
     border-radius: 12px;
     color: #fff;
@@ -689,131 +671,124 @@
     gap: 8px;
     height: 42px;
     padding: 0 14px;
-    transition: background .15s ease, transform .08s ease, border-color .15s ease;
-    white-space: nowrap;
+    transition: background .15s ease,transform .08s ease,border-color .15s ease;
+    white-space: nowrap
 }
 
 .akira-text-btn:hover {
     background: #fff;
-    color: #000;
+    color: #000
 }
 
 .akira-text-btn:active {
-    transform: scale(.98);
+    transform: scale(.98)
 }
 
 .akira-text-btn:disabled {
     cursor: not-allowed;
     opacity: .45;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .akira-text-btn-count {
-    background: rgba(37, 99, 235, .9);
+    background: rgba(37,99,235,.9);
     border-radius: 999px;
+    display: none!important;
     font-size: 10px;
     font-weight: 800;
     height: 18px;
     min-width: 18px;
-    padding: 0 6px;
-    display: none !important;
+    padding: 0 6px
 }
 
-.akira-ghost-btn,
-.akira-icon-btn,
-.akira-text-btn-count {
+.akira-ghost-btn,.akira-icon-btn,.akira-text-btn-count {
     align-items: center;
     color: #fff;
     display: inline-flex;
-    justify-content: center;
+    justify-content: center
 }
 
-.akira-ghost-btn,
-.akira-icon-btn {
+.akira-ghost-btn,.akira-icon-btn {
     background: transparent;
     border: 0;
     border-radius: .25em;
     cursor: pointer;
-    transition: background .15s ease, opacity .15s ease, transform .08s ease;
+    transition: background .15s ease,opacity .15s ease,transform .08s ease
 }
 
 .akira-back-btn {
     padding-bottom: .5em;
-    padding-right: .3em;
+    padding-right: .3em
 }
 
-.akira-volume:has(.akira-volume-pop.show)>button,
-.akira-volume>button:hover {
-    background: hsla(0, 0%, 100%, .1);
+.akira-volume:has(.akira-volume-pop.show)>button,.akira-volume>button:hover {
+    background: hsla(0,0%,100%,.1);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: .25em;
     border-top-left-radius: 0;
-    border-top-right-radius: .25em;
+    border-top-right-radius: .25em
 }
 
 .akira-volume .akira-icon-btn.lg {
     padding-right: 0;
-    width: 77px !important;
+    width: 77px!important
 }
 
 .akira-volume:has(.akira-volume-pop.show)>button {
-    background: hsla(0, 0%, 100%, 0);
+    background: hsla(0,0%,100%,0);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: .25em;
     border-top-left-radius: 0;
-    border-top-right-radius: .25em;
+    border-top-right-radius: .25em
 }
 
-.akira-ghost-btn:hover,
+.akira-ghost-btn:hover,.akira-icon-btn:hover {
+    transform: scale(1.2)
+}
+
 .akira-icon-btn:hover {
-    transform: scale(1.2);
+    border-radius: .25em
 }
 
-.akira-icon-btn:hover {
-    border-radius: .25em;
-}
-
-.akira-ghost-btn:active,
-.akira-icon-btn:active {
-    transform: scale(.97);
+.akira-ghost-btn:active,.akira-icon-btn:active {
+    transform: scale(.97)
 }
 
 .akira-icon-btn:disabled {
     cursor: not-allowed;
     opacity: .42;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .akira-icon-btn.lg {
     height: 52px;
-    width: 53px;
+    width: 53px
 }
 
 .akira-volume.akira-icon-btn img {
     height: auto;
-    width: 44px;
+    width: 44px
 }
 
 .akira-icon-btn.xl {
     height: 64px;
-    width: 64px;
+    width: 64px
 }
 
 .akira-icon-btn.xxl {
     border-radius: 999px;
     height: 82px;
     margin-top: .2em;
-    width: 82px;
+    width: 82px
 }
 
-.akira-icon-btn.emphasized,
-.akira-icon-btn.emphasized:hover {
-    background: hsla(0, 0%, 100%, 0);
+.akira-icon-btn.emphasized,.akira-icon-btn.emphasized:hover {
+    background: hsla(0,0%,100%,0)
 }
 
 .akira-ghost-btn {
     height: 42px;
-    width: 42px;
+    width: 42px
 }
 
 .akira-icon-btn img {
@@ -822,43 +797,42 @@
     -o-object-fit: contain;
     object-fit: contain;
     opacity: .98;
-    pointer-events: none;
+    pointer-events: none
 }
 
 img.playSVG {
-    margin-right: -.4em;
+    margin-right: -.4em
 }
 
 .akira-icon-btn.lg img {
     height: auto;
-    width: 45px;
+    width: 54px;
 }
 
 .akira-volume button img {
     height: auto;
-    width: 105px !important;
+    width: 105px!important
 }
 
-.akira-icon-btn.xl img,
-.akira-icon-btn.xxl img {
+.akira-icon-btn.xl img,.akira-icon-btn.xxl img {
     height: auto;
-    width: 51px;
+    width: 51px
 }
 
 .akira-icon-btn.xxl img {
     height: auto;
     margin-top: -.3em;
-    width: 56px;
+    width: 56px
 }
 
 .akira-volume {
     align-items: center;
     display: flex;
-    position: relative;
+    position: relative
 }
 
 .akira-volume .akira-icon-btn lg {
-    width: 80px !important;
+    width: 80px!important
 }
 
 .akira-volume-pop {
@@ -872,14 +846,14 @@ img.playSVG {
     position: absolute;
     right: 99%;
     transform: translateY(0);
-    transition: opacity .15s ease, transform .15s ease;
-    width: 160px;
+    transition: opacity .15s ease,transform .15s ease;
+    width: 160px
 }
 
 .akira-volume-pop.show {
     border-radius: .25em 0 0 .25em;
     opacity: 1;
-    pointer-events: auto;
+    pointer-events: auto
 }
 
 .akira-volume-slider {
@@ -890,13 +864,13 @@ img.playSVG {
     background: transparent;
     cursor: pointer;
     height: 18px;
-    width: 100%;
+    width: 100%
 }
 
 .akira-volume-slider::-webkit-slider-runnable-track {
-    background: linear-gradient(#fff, #fff) 0 0 /var(--akira-volume-percent) 100% no-repeat, hsla(0, 0%, 100%, .24);
+    background: linear-gradient(#fff,#fff) 0 0 /var(--akira-volume-percent) 100% no-repeat,hsla(0,0%,100%,.24);
     border-radius: 999px;
-    height: 5px;
+    height: 5px
 }
 
 .akira-volume-slider::-webkit-slider-thumb {
@@ -909,21 +883,21 @@ img.playSVG {
     height: 18px;
     margin-right: -.3em;
     margin-top: -6.5px;
-    width: 18px;
+    width: 18px
 }
 
 .akira-volume-slider::-moz-range-track {
-    background: hsla(0, 0%, 100%, .24);
+    background: hsla(0,0%,100%,.24);
     border: 0;
     border-radius: 999px;
-    height: 5px;
+    height: 5px
 }
 
 .akira-volume-slider::-moz-range-progress {
     background: #fff;
     border: 0;
     border-radius: 999px;
-    height: 5px;
+    height: 5px
 }
 
 .akira-volume-slider::-moz-range-thumb {
@@ -932,19 +906,19 @@ img.playSVG {
     border-radius: 999px;
     cursor: pointer;
     height: 18px;
-    width: 18px;
+    width: 18px
 }
 
 .akira-menu-wrap {
-    position: relative;
+    position: relative
 }
 
 .akira-menu {
-    background: hsla(0, 0%, 5%, .96);
-    border: 1px solid hsla(0, 0%, 100%, .08);
+    background: hsla(0,0%,5%,.96);
+    border: 1px solid hsla(0,0%,100%,.08);
     border-radius: .25em;
     bottom: 58px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, .38);
+    box-shadow: 0 12px 34px rgba(0,0,0,.38);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -953,7 +927,7 @@ img.playSVG {
     overflow: auto;
     padding: 8px;
     position: absolute;
-    right: 0;
+    right: 0
 }
 
 .akira-menu-item {
@@ -965,24 +939,23 @@ img.playSVG {
     font-size: 15px;
     line-height: 1.2;
     padding: 12px;
-    text-align: left;
+    text-align: left
 }
 
 .akira-menu-item:hover {
-    background: hsla(0, 0%, 100%, .08);
+    background: hsla(0,0%,100%,.08)
 }
 
 @media (max-width: 1240px) {
     .akira-reco-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr))
+        grid-template-columns:repeat(4,minmax(0,1fr))
     }
 
-    ;
-}
+    ;}
 
 @media (max-width: 1100px) {
     .akira-title {
-        font-size: 32px
+        font-size:32px
     }
 
     .akira-time {
@@ -1021,15 +994,14 @@ img.playSVG {
     }
 
     .akira-reco-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr))
+        grid-template-columns: repeat(3,minmax(0,1fr))
     }
 
-    ;
-}
+    ;}
 
 @media (max-width: 780px) {
     .akira-top-overlay {
-        padding: 14px 14px 20px
+        padding:14px 14px 20px
     }
 
     .akira-title {
@@ -1135,9 +1107,8 @@ img.playSVG {
         padding: 10px
     }
 
-    .akira-modal,
-    .akira-modal-reco {
-        height: min(86vh, 760px);
+    .akira-modal,.akira-modal-reco {
+        height: min(86vh,760px);
         width: calc(100vw - 16px)
     }
 
@@ -1177,7 +1148,7 @@ img.playSVG {
 
     .akira-reco-grid {
         gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr))
+        grid-template-columns: repeat(2,minmax(0,1fr))
     }
 
     .akira-reco-card {
@@ -1194,8 +1165,7 @@ img.playSVG {
         font-size: 11px
     }
 
-    ;
-}
+    ;}
 
 .akira-season-dd {
     align-items: center;
@@ -1203,20 +1173,20 @@ img.playSVG {
     gap: 8px;
     min-width: 0;
     position: relative;
-    z-index: 2;
+    z-index: 2
 }
 
 .akira-season-dd-label {
-    color: hsla(0, 0%, 100%, .88);
+    color: hsla(0,0%,100%,.88);
     font-size: 13px;
     font-weight: 600;
-    white-space: nowrap;
+    white-space: nowrap
 }
 
 .akira-season-dd-trigger {
     align-items: center;
-    background: hsla(0, 0%, 100%, .06);
-    border: 1px solid hsla(0, 0%, 100%, .12);
+    background: hsla(0,0%,100%,.06);
+    border: 1px solid hsla(0,0%,100%,.12);
     border-radius: 8px;
     color: #fff;
     cursor: pointer;
@@ -1229,38 +1199,38 @@ img.playSVG {
     line-height: 1;
     min-width: 88px;
     padding: 0 10px;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+    transition: background .15s ease,border-color .15s ease,transform .08s ease
 }
 
 .akira-season-dd-trigger:hover {
-    background: hsla(0, 0%, 100%, .1);
-    border-color: hsla(0, 0%, 100%, .2);
+    background: hsla(0,0%,100%,.1);
+    border-color: hsla(0,0%,100%,.2)
 }
 
 .akira-season-dd-trigger:active {
-    transform: scale(.985);
+    transform: scale(.985)
 }
 
 .akira-season-dd-trigger.open {
-    background: hsla(0, 0%, 100%, .12);
-    border-color: hsla(0, 0%, 100%, .22);
+    background: hsla(0,0%,100%,.12);
+    border-color: hsla(0,0%,100%,.22)
 }
 
 .akira-season-dd-caret {
     line-height: 1;
     opacity: .9;
-    transition: transform .15s ease;
+    transition: transform .15s ease
 }
 
 .akira-season-dd-trigger.open .akira-season-dd-caret {
-    transform: rotate(180deg);
+    transform: rotate(180deg)
 }
 
 .akira-season-dd-menu {
-    background: hsla(0, 0%, 5%, .96);
-    border: 1px solid hsla(0, 0%, 100%, .08);
+    background: hsla(0,0%,5%,.96);
+    border: 1px solid hsla(0,0%,100%,.08);
     border-radius: 12px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, .38);
+    box-shadow: 0 12px 34px rgba(0,0,0,.38);
     display: grid;
     gap: 4px;
     left: 0;
@@ -1268,7 +1238,7 @@ img.playSVG {
     padding: 8px;
     position: absolute;
     top: calc(100% + 8px);
-    z-index: 30;
+    z-index: 30
 }
 
 .akira-season-dd-item {
@@ -1283,65 +1253,63 @@ img.playSVG {
     justify-content: space-between;
     padding: 10px 12px;
     text-align: left;
-    transition: background .15s ease, border-color .15s ease, transform .08s ease;
-    width: 100%;
+    transition: background .15s ease,border-color .15s ease,transform .08s ease;
+    width: 100%
 }
 
 .akira-season-dd-item:hover {
-    background: hsla(0, 0%, 100%, .06);
-    border-color: hsla(0, 0%, 100%, .08);
+    background: hsla(0,0%,100%,.06);
+    border-color: hsla(0,0%,100%,.08)
 }
 
 .akira-season-dd-item:active {
-    transform: scale(.995);
+    transform: scale(.995)
 }
 
 .akira-season-dd-item.active {
-    background: linear-gradient(180deg, rgba(37, 99, 235, .12), hsla(0, 0%, 100%, .02));
-    border-color: rgba(37, 99, 235, .35);
+    background: linear-gradient(180deg,rgba(37,99,235,.12),hsla(0,0%,100%,.02));
+    border-color: rgba(37,99,235,.35)
 }
 
 .akira-season-dd-item-text {
     color: #fff;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 600
 }
 
 .akira-season-dd-check {
     color: #93c5fd;
     font-size: 13px;
     font-weight: 800;
-    line-height: 1;
+    line-height: 1
 }
 
 .akira-episode-thumb {
-    position: relative;
     overflow: hidden;
+    position: relative
 }
 
 .akira-episode-thumb-progress {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    width: 100%;
-    height: 4px;
-    pointer-events: none;
-    z-index: 2;
     background: transparent;
-    /* solo fill */
-    ;
+    bottom: 0;
+    height: 4px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    z-index: 2
 }
 
 .akira-episode-thumb-progress-fill {
+    background: var(--akira-grad,linear-gradient(90deg,#00eaff,#2563eb));
     height: 100%;
-    width: 0;
-    background: var(--akira-grad, linear-gradient(90deg, #00eaff, #2563eb));
     transition: width .18s ease;
+    width: 0
 }
 
 @media (max-width: 780px) {
     .akira-season-dd {
-        gap: 6px
+        gap:6px
     }
 
     .akira-season-dd-label {
@@ -1371,5 +1339,8 @@ img.playSVG {
         font-size: 12px
     }
 
-    ;
+    ;}
+
+.akira-volume:has(.akira-volume-pop.show) > .akira-icon-btn.lg {
+    transform: scale(1.2);
 }
