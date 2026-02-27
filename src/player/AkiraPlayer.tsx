@@ -1429,10 +1429,17 @@ export function AkiraPlayer({
             setDuration(v.duration || 0);
 
             if (autoplay || playlistNextAutoplayRef.current) {
-                v.play().catch((e) => {
-                    console.warn("[AkiraPlayer][autoplay] onMeta bloqueado/no disponible:", e);
+                v.muted = false;
+                if (!Number.isFinite(v.volume) || v.volume <= 0) {
+                    v.volume = 1;
+                }
+
+                v.play().then(() => {
+                    playlistNextAutoplayRef.current = false;
+                }).catch((e) => {
+                    console.warn("[AkiraPlayer][autoplay] onMeta bloqueado/no disponible (audio):", e);
+                    // no apagar el flag acá; dejamos que el post-handshake lo siga intentando
                 });
-                playlistNextAutoplayRef.current = false;
             }
         };
 
@@ -1481,6 +1488,10 @@ export function AkiraPlayer({
         v.volume = 1;
 
         if (autoplay) {
+            v.muted = false;
+            if (!Number.isFinite(v.volume) || v.volume <= 0) {
+                v.volume = 1;
+            }
             v.play().catch(() => {
                 // noop
             });
@@ -1499,7 +1510,7 @@ export function AkiraPlayer({
         };
     }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode, isPlayerBootReady]);
 
-    // ✅ Autoplay reforzado POST-handshake
+    // ✅ Autoplay reforzado POST-handshake (SOLO con audio, sin fallback mute)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1516,44 +1527,49 @@ export function AkiraPlayer({
 
         let cancelled = false;
 
-        const tryPlayRobust = async (reason: string) => {
+        const tryPlayWithAudioOnly = async (reason: string) => {
             if (cancelled) return;
             if (!v.paused && !v.ended) return;
 
             try {
-                await v.play();
-                console.log("[AkiraPlayer][autoplay] ok", { reason, muted: v.muted });
-                return;
-            } catch (e1) {
-                console.warn("[AkiraPlayer][autoplay] bloqueado con audio, retry muted", {
-                    reason,
-                    error: (e1 as any)?.message || e1
-                });
-            }
+                // ✅ Forzar intento con audio
+                v.muted = false;
+                if (!Number.isFinite(v.volume) || v.volume <= 0) {
+                    v.volume = 1;
+                }
 
-            try {
-                v.muted = true;
                 await v.play();
-                console.log("[AkiraPlayer][autoplay] ok (muted fallback)", { reason });
-                flashFeedback("Reproduciendo (silencio)");
-            } catch (e2) {
-                console.warn("[AkiraPlayer][autoplay] también falló muted", {
+
+                console.log("[AkiraPlayer][autoplay] ok (audio)", {
                     reason,
-                    error: (e2 as any)?.message || e2
+                    muted: v.muted,
+                    volume: v.volume
                 });
+
+                // si venía de playlist, ya consumimos el flag
+                playlistNextAutoplayRef.current = false;
+                return;
+            } catch (e) {
+                console.warn("[AkiraPlayer][autoplay] bloqueado por navegador (audio)", {
+                    reason,
+                    error: (e as any)?.message || e
+                });
+
+                // ❌ NO hacemos fallback a muted
+                flashFeedback("Autoplay con audio bloqueado");
             }
         };
 
         const rafId = window.requestAnimationFrame(() => {
-            void tryPlayRobust("post-handshake-raf");
+            void tryPlayWithAudioOnly("post-handshake-raf");
         });
 
         autoplayRetryTimerRef.current = window.setTimeout(() => {
-            void tryPlayRobust("post-handshake-t+160ms");
+            void tryPlayWithAudioOnly("post-handshake-t+160ms");
         }, 160);
 
         autoplayFinalRetryTimerRef.current = window.setTimeout(() => {
-            void tryPlayRobust("post-handshake-t+600ms");
+            void tryPlayWithAudioOnly("post-handshake-t+600ms");
         }, 600);
 
         return () => {
@@ -2090,7 +2106,7 @@ export function AkiraPlayer({
                 controls={false}
                 preload="metadata"
                 crossOrigin="anonymous"
-                autoPlay={autoplay}
+                autoPlay={false}
             >
                 {subtitles.map((t) => (
                     <track
@@ -2543,6 +2559,21 @@ export function AkiraPlayer({
                     <span className="akira-time">{fmtTime(duration)}</span>
                 </div>
 
+                {/* ✅ Overlay global prev/next episode (fuera de center cluster) */}
+                {episodeNavOverlay && (
+                    <div
+                        className={`akira-episode-step-overlay-layer ${
+                            episodeNavOverlay.direction === "prev" ? "is-prev" : "is-next"
+                        }`}
+                        aria-hidden="true"
+                    >
+                        {renderEpisodeStepPopover(
+                            episodeNavOverlay.direction,
+                            episodeNavOverlay.episode
+                        )}
+                    </div>
+                )}
+
                 <div className="akira-toolbar">
                     <div className="akira-left">
                         <button
@@ -2588,8 +2619,6 @@ export function AkiraPlayer({
                                 onFocus={() => showEpisodeStepHover(prevEpisodeInPlaylist, "prev")}
                                 onBlur={() => hideEpisodeStepHover("prev")}
                             >
-                                {renderEpisodeStepPopover("prev", prevEpisodeInPlaylist)}
-
                                 <IconButton
                                     onClick={goPrevEpisode}
                                     icon={ICONS.previous}
@@ -2633,8 +2662,6 @@ export function AkiraPlayer({
                                 onFocus={() => showEpisodeStepHover(nextEpisodeInPlaylist, "next")}
                                 onBlur={() => hideEpisodeStepHover("next")}
                             >
-                                {renderEpisodeStepPopover("next", nextEpisodeInPlaylist)}
-
                                 <IconButton
                                     onClick={goNextEpisode}
                                     icon={ICONS.next}
