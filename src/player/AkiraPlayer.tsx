@@ -27,13 +27,13 @@ type EpisodeItem = {
     /** Compat viejo */
     thumbnail?: string | null;
 
-    /** Recomendado (alias limpio desde backend) */
+    /** Alias limpio */
     thumbnailEpisode?: string | null;
 
-    /** Columna literal de DB si viene así en el objeto */
+    /** Columna literal de DB (si llega así) */
     "thumbnails-episode"?: string | null;
 
-    /** Compat snake_case si te llega así */
+    /** Compat snake_case */
     thumbnails_episode?: string | null;
 
     seasonId?: string | null;
@@ -46,13 +46,10 @@ type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string; // compatibilidad
-    channelLabel?: string; // compatibilidad
+    title?: string;
+    channelLabel?: string;
 
-    /** Base de assets (compat actual) */
     assetBase?: string;
-
-    /** Alias opcional para usar desde embeds/watch.html */
     assetBaseUrl?: string;
 
     contentId: string;
@@ -64,7 +61,6 @@ type Props = {
 
     onBack?: () => void;
 
-    // Left actions / data
     recommendations?: RecommendedItem[];
     episodes?: EpisodeItem[];
 
@@ -83,14 +79,15 @@ type EpisodeProgressInfo = {
     completed: boolean;
 };
 
-type ProgressDbRow = {
-    content_id?: string | null;
-    season_id?: string | null;
-    episode_id?: string | null;
-    position_seconds?: number | string | null;
-    duration_seconds?: number | string | null;
-    updated_at?: string | null;
+type EpisodesThumbDbRow = {
+    id?: string | null;
+    "thumbnails-episode"?: string | null;
+    thumbnails_episode?: string | null;
+    thumbnailEpisode?: string | null;
+    thumbnail?: string | null;
 };
+
+type FeedbackState = { text: string; visible: boolean } | null;
 
 function clamp(n: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, n));
@@ -109,17 +106,23 @@ function fmtTime(seconds: number): string {
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function getEpisodeThumbSrc(ep: EpisodeItem): string | null {
+function pickEpisodeThumbValue(obj: Partial<EpisodeItem> | Partial<EpisodesThumbDbRow> | null | undefined): string | null {
+    if (!obj) return null;
+
     const src =
-        ep["thumbnails-episode"] ??
-        ep.thumbnailEpisode ??
-        ep.thumbnails_episode ??
-        ep.thumbnail ??
+        (obj as any)["thumbnails-episode"] ??
+        (obj as any).thumbnailEpisode ??
+        (obj as any).thumbnails_episode ??
+        (obj as any).thumbnail ??
         null;
 
     if (!src) return null;
     const trimmed = String(src).trim();
     return trimmed.length ? trimmed : null;
+}
+
+function getEpisodeThumbSrc(ep: EpisodeItem, hydratedThumb?: string | null): string | null {
+    return pickEpisodeThumbValue(ep) ?? (hydratedThumb ? String(hydratedThumb).trim() || null : null);
 }
 
 function getIcons(assetBase: string) {
@@ -142,10 +145,6 @@ function getIcons(assetBase: string) {
     };
 }
 
-/**
- * Detecta Safari/iOS para permitir HLS nativo.
- * Evita falsos positivos de Chrome/Chromium con canPlayType('application/vnd.apple.mpegurl')
- */
 function isSafariLikeForNativeHls(): boolean {
     const ua = navigator.userAgent || "";
     const vendor = navigator.vendor || "";
@@ -160,89 +159,141 @@ function isSafariLikeForNativeHls(): boolean {
     return isIOS || isSafariDesktop;
 }
 
-type FeedbackState = { text: string; visible: boolean } | null;
-
-async function loadEpisodesProgressFromSupabase(params: {
+/**
+ * ✅ Progreso real por episodio usando loadProgress()
+ * (evita asumir nombres de columnas en watch_progress)
+ */
+async function loadEpisodesProgressReal(params: {
     contentId: string;
+    seasonId?: string | null;
     episodes: EpisodeItem[];
 }): Promise<Record<string, EpisodeProgressInfo>> {
-    const { contentId, episodes } = params;
+    const { contentId, seasonId, episodes } = params;
+    const map: Record<string, EpisodeProgressInfo> = {};
 
-    const result: Record<string, EpisodeProgressInfo> = {};
-    if (!contentId || !episodes.length) return result;
+    if (!contentId || !episodes.length) return map;
 
-    const episodeIds = Array.from(
-        new Set(
-            episodes
-                .map((ep) => String(ep.id || "").trim())
-                .filter(Boolean)
-        )
+    const entries = await Promise.all(
+        episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
+            let row: any = null;
+
+            // Probamos con season del episodio y fallback al season actual
+            const seasonCandidates = Array.from(
+                new Set<(string | null | undefined)>([
+                    ep.seasonId ?? undefined,
+                    seasonId ?? undefined,
+                    undefined
+                ])
+            );
+
+            for (const sId of seasonCandidates) {
+                try {
+                    row = await loadProgress({
+                        contentId,
+                        seasonId: sId ?? null,
+                        episodeId: ep.id
+                    });
+                } catch {
+                    row = null;
+                }
+                if (row) break;
+            }
+
+            const positionSeconds = Number((row as any)?.position_seconds || 0);
+            const rowDuration = Number((row as any)?.duration_seconds || 0);
+            const fallbackDuration = Number(ep.durationSeconds || 0);
+            const durationSeconds = rowDuration > 0 ? rowDuration : fallbackDuration;
+
+            const percent =
+                durationSeconds > 0
+                    ? clamp((positionSeconds / durationSeconds) * 100, 0, 100)
+                    : 0;
+
+            const completed =
+                durationSeconds > 0 &&
+                durationSeconds - positionSeconds <= (CONFIG.NEAR_END_SECONDS ?? 45);
+
+            const hasProgress = positionSeconds > 0;
+
+            return [
+                ep.id,
+                {
+                    positionSeconds,
+                    durationSeconds,
+                    percent,
+                    hasProgress,
+                    completed
+                }
+            ];
+        })
     );
 
-    if (!episodeIds.length) return result;
+    return Object.fromEntries(entries);
+}
 
-    const tableName = String((CONFIG as any)?.PROGRESS_TABLE || "watch_progress");
+/**
+ * ✅ Hidrata thumbs desde Supabase si no vinieron en props.episodes
+ * Tabla por defecto: "episodes"
+ */
+async function loadEpisodeThumbsFromSupabase(params: {
+    episodes: EpisodeItem[];
+}): Promise<Record<string, string>> {
+    const { episodes } = params;
+    const result: Record<string, string> = {};
 
-    // Batch read real desde Supabase (RLS debería filtrar al usuario logueado)
-    const { data, error } = await (supabase as any)
-        .from(tableName)
-        .select("content_id, season_id, episode_id, position_seconds, duration_seconds, updated_at")
-        .eq("content_id", contentId)
-        .in("episode_id", episodeIds);
+    const missingIds = episodes
+        .filter((ep) => !pickEpisodeThumbValue(ep))
+        .map((ep) => String(ep.id || "").trim())
+        .filter(Boolean);
 
-    if (error) {
-        console.warn("[AkiraPlayer] Error leyendo progreso de episodios en Supabase:", error);
+    if (!missingIds.length) return result;
+
+    const episodesTable = String((CONFIG as any)?.EPISODES_TABLE || "episodes");
+
+    // Intento 1: columna literal con guion
+    let data: EpisodesThumbDbRow[] | null = null;
+    let err: any = null;
+
+    try {
+        const r1 = await (supabase as any)
+            .from(episodesTable)
+            .select(`id,"thumbnails-episode"`)
+            .in("id", missingIds);
+
+        data = (r1.data ?? null) as EpisodesThumbDbRow[] | null;
+        err = r1.error ?? null;
+    } catch (e) {
+        err = e;
+        data = null;
+    }
+
+    // Intento 2: snake_case / alias
+    if (err || !data) {
+        try {
+            const r2 = await (supabase as any)
+                .from(episodesTable)
+                .select("id,thumbnails_episode,thumbnailEpisode,thumbnail")
+                .in("id", missingIds);
+
+            data = (r2.data ?? null) as EpisodesThumbDbRow[] | null;
+            err = r2.error ?? null;
+        } catch (e) {
+            err = e;
+            data = null;
+        }
+    }
+
+    if (err && !data) {
+        console.warn("[AkiraPlayer] No se pudieron cargar thumbs desde Supabase (tabla episodes):", err);
         return result;
     }
 
-    const rows = (Array.isArray(data) ? data : []) as ProgressDbRow[];
+    for (const row of data || []) {
+        const id = String(row?.id || "").trim();
+        if (!id) continue;
 
-    // Si hay duplicados por episodio (raro pero puede pasar), preferimos el más reciente
-    const latestByEpisodeId = new Map<string, ProgressDbRow>();
-
-    for (const row of rows) {
-        const epId = String(row?.episode_id || "").trim();
-        if (!epId) continue;
-
-        const prev = latestByEpisodeId.get(epId);
-        if (!prev) {
-            latestByEpisodeId.set(epId, row);
-            continue;
-        }
-
-        const prevTs = prev.updated_at ? new Date(prev.updated_at).getTime() : 0;
-        const rowTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-
-        if (rowTs >= prevTs) {
-            latestByEpisodeId.set(epId, row);
-        }
-    }
-
-    for (const ep of episodes) {
-        const row = latestByEpisodeId.get(String(ep.id));
-        const positionSeconds = Number(row?.position_seconds || 0);
-        const rowDuration = Number(row?.duration_seconds || 0);
-        const fallbackDuration = Number(ep.durationSeconds || 0);
-        const durationSeconds = rowDuration > 0 ? rowDuration : fallbackDuration;
-
-        const percent =
-            durationSeconds > 0
-                ? clamp((positionSeconds / durationSeconds) * 100, 0, 100)
-                : 0;
-
-        const completed =
-            durationSeconds > 0 &&
-            durationSeconds - positionSeconds <= (CONFIG.NEAR_END_SECONDS ?? 45);
-
-        const hasProgress = positionSeconds > 0;
-
-        result[ep.id] = {
-            positionSeconds,
-            durationSeconds,
-            percent,
-            hasProgress,
-            completed
-        };
+        const thumb = pickEpisodeThumbValue(row);
+        if (thumb) result[id] = thumb;
     }
 
     return result;
@@ -269,21 +320,16 @@ export function AkiraPlayer({
     onSelectEpisode,
     recommendationsLabel = "Te podría gustar"
 }: Props) {
-    // Compat TS estricto (no se muestran)
     void title;
     void channelLabel;
 
-    // ✅ Prioridad: assetBaseUrl > assetBase > "/assets"
     const resolvedAssetBase = (assetBaseUrl || assetBase || "/assets").replace(/\/$/, "");
-
     const ICONS = useMemo(() => getIcons(resolvedAssetBase), [resolvedAssetBase]);
 
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const progressWrapRef = useRef<HTMLDivElement | null>(null);
     const volumeSliderRef = useRef<HTMLInputElement | null>(null);
-
-    // Dropdown custom temporada
     const seasonDropdownRef = useRef<HTMLDivElement | null>(null);
 
     const hlsRef = useRef<Hls | null>(null);
@@ -292,7 +338,6 @@ export function AkiraPlayer({
     const controlsHideTimerRef = useRef<number | null>(null);
     const feedbackTimerRef = useRef<number | null>(null);
 
-    // Playback / UI state
     const [playing, setPlaying] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [muted, setMuted] = useState(false);
@@ -300,29 +345,26 @@ export function AkiraPlayer({
 
     const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-    // Layout left panels
     const [showEpisodes, setShowEpisodes] = useState(false);
     const [showRecommendations, setShowRecommendations] = useState(false);
 
-    // Dropdown custom temporada
     const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number>(1);
     const [showSeasonDropdown, setShowSeasonDropdown] = useState(false);
 
-    // Progreso episodios (modal) - real desde Supabase
+    // ✅ progreso real de episodios (desde loadProgress/Supabase)
     const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<string, EpisodeProgressInfo>>({});
+    // ✅ thumbs hidratados desde Supabase/episodes
+    const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [bufferedEnd, setBufferedEnd] = useState(0);
 
-    // Controls visibility / OTT vibe
     const [controlsVisible, setControlsVisible] = useState(true);
     const [isPointerOverPlayer, setIsPointerOverPlayer] = useState(false);
 
-    // Feedback overlay (+10s / -10s / Play / Pause)
     const [feedback, setFeedback] = useState<FeedbackState>(null);
 
-    // Thumbnail hover preview (VTT)
     const [thumbnailCues, setThumbnailCues] = useState<ThumbnailCue[]>([]);
     const [hoverTime, setHoverTime] = useState<number | null>(null);
     const [hoverX, setHoverX] = useState(0);
@@ -331,9 +373,6 @@ export function AkiraPlayer({
     const anyFloatingOpen =
         showEpisodes || showRecommendations || showVolumeSlider || showSeasonDropdown;
 
-    // ----------------------------
-    // Helpers
-    // ----------------------------
     const showControlsTemporarily = () => {
         setControlsVisible(true);
 
@@ -342,7 +381,6 @@ export function AkiraPlayer({
             controlsHideTimerRef.current = null;
         }
 
-        // Si está pausado, no ocultar
         if (!playing) return;
 
         controlsHideTimerRef.current = window.setTimeout(() => {
@@ -379,8 +417,7 @@ export function AkiraPlayer({
     };
 
     // ----------------------------
-    // HLS setup (.m3u8)
-    // ✅ FIX: preferir Hls.js antes que HLS nativo
+    // HLS setup
     // ----------------------------
     useEffect(() => {
         const video = videoRef.current;
@@ -388,7 +425,6 @@ export function AkiraPlayer({
 
         restoredRef.current = false;
 
-        // destruir instancia HLS previa
         if (hlsRef.current) {
             try {
                 hlsRef.current.destroy();
@@ -398,7 +434,6 @@ export function AkiraPlayer({
             hlsRef.current = null;
         }
 
-        // resetear video para evitar estados colgados entre cambios de src
         try {
             video.pause();
         } catch {
@@ -427,7 +462,6 @@ export function AkiraPlayer({
             hlsType: typeof Hls
         });
 
-        // ✅ 1) PRIORIDAD: Hls.js
         if (hlsJsSupported) {
             const hls = new Hls({
                 enableWorker: true,
@@ -469,15 +503,11 @@ export function AkiraPlayer({
 
             hls.loadSource(src);
             hls.attachMedia(video);
-        }
-        // ✅ 2) HLS nativo solo en Safari/iOS reales
-        else if (nativeHlsCanPlay && isSafariLikeForNativeHls()) {
+        } else if (nativeHlsCanPlay && isSafariLikeForNativeHls()) {
             console.log("[AkiraPlayer][HLS] usando HLS nativo (Safari/iOS)");
             video.src = src;
             video.load();
-        }
-        // ❌ 3) Sin soporte HLS
-        else {
+        } else {
             console.warn("[AkiraPlayer] HLS no soportado en este navegador", {
                 nativeHlsCanPlay,
                 hlsJsSupported,
@@ -511,7 +541,7 @@ export function AkiraPlayer({
     }, [src]);
 
     // ----------------------------
-    // Video events base
+    // Video events
     // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
@@ -559,12 +589,7 @@ export function AkiraPlayer({
                 currentSrc: v.currentSrc,
                 networkState: v.networkState,
                 readyState: v.readyState,
-                mediaError: err
-                    ? {
-                        code: err.code,
-                        message: err.message || null
-                    }
-                    : null
+                mediaError: err ? { code: err.code, message: err.message || null } : null
             });
         };
 
@@ -582,7 +607,7 @@ export function AkiraPlayer({
 
         if (autoplay) {
             v.play().catch(() => {
-                // autoplay puede bloquearse por navegador
+                // noop
             });
         }
 
@@ -686,7 +711,7 @@ export function AkiraPlayer({
     }, [contentId, seasonId, episodeId]);
 
     // ----------------------------
-    // Continue Watching (flush on pause / unload)
+    // Continue Watching (flush)
     // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
@@ -721,7 +746,7 @@ export function AkiraPlayer({
     }, [contentId, seasonId, episodeId]);
 
     // ----------------------------
-    // Progreso de TODOS los episodios (real desde Supabase, batch)
+    // ✅ Progreso de TODOS los episodios (real, usando loadProgress)
     // ----------------------------
     useEffect(() => {
         if (!showEpisodes) return;
@@ -735,16 +760,15 @@ export function AkiraPlayer({
                     return;
                 }
 
-                const progressMap = await loadEpisodesProgressFromSupabase({
+                const progressMap = await loadEpisodesProgressReal({
                     contentId,
+                    seasonId,
                     episodes
                 });
 
-                if (!cancelled) {
-                    setEpisodeProgressMap(progressMap);
-                }
+                if (!cancelled) setEpisodeProgressMap(progressMap);
             } catch (e) {
-                console.warn("[AkiraPlayer] No se pudo cargar progreso de episodios desde Supabase:", e);
+                console.warn("[AkiraPlayer] No se pudo cargar progreso de episodios:", e);
                 if (!cancelled) setEpisodeProgressMap({});
             }
         })();
@@ -752,7 +776,37 @@ export function AkiraPlayer({
         return () => {
             cancelled = true;
         };
-    }, [showEpisodes, episodes, contentId]);
+    }, [showEpisodes, episodes, contentId, seasonId]);
+
+    // ----------------------------
+    // ✅ Hidratar thumbs episodios desde Supabase (si faltan)
+    // ----------------------------
+    useEffect(() => {
+        if (!showEpisodes) return;
+
+        let cancelled = false;
+
+        (async () => {
+            try {
+                if (!episodes.length) {
+                    if (!cancelled) setEpisodeThumbsMap({});
+                    return;
+                }
+
+                const thumbsMap = await loadEpisodeThumbsFromSupabase({ episodes });
+
+                if (!cancelled && Object.keys(thumbsMap).length) {
+                    setEpisodeThumbsMap((prev) => ({ ...prev, ...thumbsMap }));
+                }
+            } catch (e) {
+                console.warn("[AkiraPlayer] No se pudieron hidratar thumbs desde Supabase:", e);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [showEpisodes, episodes]);
 
     // ----------------------------
     // Thumbnails VTT (hover preview)
@@ -837,7 +891,7 @@ export function AkiraPlayer({
     }, []);
 
     // ----------------------------
-    // Cerrar dropdown custom (click afuera / escape)
+    // Cerrar dropdown custom
     // ----------------------------
     useEffect(() => {
         if (!showSeasonDropdown) return;
@@ -865,7 +919,7 @@ export function AkiraPlayer({
     }, [showSeasonDropdown]);
 
     // ----------------------------
-    // CSS var volume fill (WebKit dynamic gradient)
+    // CSS var volume fill
     // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
@@ -899,7 +953,7 @@ export function AkiraPlayer({
     }, []);
 
     // ----------------------------
-    // Derived values
+    // Derived
     // ----------------------------
     const volumeIcon = useMemo(() => {
         if (muted) return ICONS.volume.mute;
@@ -926,10 +980,8 @@ export function AkiraPlayer({
     const hasEpisodes = episodes.length > 0;
     const hasRecommendations = recommendations.length > 0;
 
-    // Dropdown fijo 1/2 (pedido)
     const seasonDropdownOptions = useMemo(() => [1, 2], []);
 
-    // Filtrado de episodios por temporada seleccionada
     const episodesForSelectedSeason = useMemo(() => {
         return episodes.filter((ep) => {
             const epSeason = ep.seasonNumber ?? 1;
@@ -1043,7 +1095,6 @@ export function AkiraPlayer({
     const openEpisodesPanel = () => {
         closeFloatingPanels();
 
-        // Preseleccionar temporada según episodio actual (si existe)
         const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
         const nextSeason = currentEpisode?.seasonNumber === 2 ? 2 : 1;
         setSelectedSeasonNumber(nextSeason);
@@ -1066,9 +1117,6 @@ export function AkiraPlayer({
         showControlsTemporarily();
     };
 
-    // ----------------------------
-    // Pointer / autohide controls
-    // ----------------------------
     const handlePointerMove = () => {
         setIsPointerOverPlayer(true);
         showControlsTemporarily();
@@ -1086,7 +1134,6 @@ export function AkiraPlayer({
         }
     };
 
-    // Doble click seek
     const handleDoubleClickOverlay = (side: "left" | "right") => {
         if (side === "left") seekBy(-10);
         else seekBy(10);
@@ -1107,7 +1154,6 @@ export function AkiraPlayer({
             }}
             onContextMenu={(e) => e.preventDefault()}
         >
-            {/* VIDEO */}
             <video
                 ref={videoRef}
                 className="akira-video"
@@ -1129,7 +1175,6 @@ export function AkiraPlayer({
                 ))}
             </video>
 
-            {/* DOUBLE CLICK SEEK ZONES */}
             <div className="akira-gesture-layer" aria-hidden="true">
                 <button
                     type="button"
@@ -1157,7 +1202,6 @@ export function AkiraPlayer({
                 />
             </div>
 
-            {/* TOP OVERLAY (solo botón back) */}
             <div className="akira-top-overlay">
                 <div className="akira-top-left">
                     <button
@@ -1176,12 +1220,10 @@ export function AkiraPlayer({
                 </div>
             </div>
 
-            {/* CENTER FEEDBACK */}
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-feedback-pill">{feedback?.text ?? ""}</div>
             </div>
 
-            {/* Backdrop para modales/paneles */}
             {(showEpisodes || showRecommendations) && (
                 <div
                     className="akira-overlay-shell"
@@ -1194,7 +1236,6 @@ export function AkiraPlayer({
                 />
             )}
 
-            {/* Modal Episodios */}
             {showEpisodes && (
                 <div
                     className="akira-modal"
@@ -1217,7 +1258,6 @@ export function AkiraPlayer({
                                 Episodios {episodes.length ? `(${episodesForSelectedSeason.length}/${episodes.length})` : ""}
                             </div>
 
-                            {/* Dropdown custom temporada 1 / 2 */}
                             <div className="akira-season-dd" ref={seasonDropdownRef}>
                                 <span className="akira-season-dd-label">Temporada</span>
 
@@ -1233,7 +1273,7 @@ export function AkiraPlayer({
                                         showControlsTemporarily();
                                     }}
                                 >
-                                    <span>T{selectedSeasonNumber}</span>
+                                    <span>Temporada {selectedSeasonNumber}</span>
                                     <span className="akira-season-dd-caret" aria-hidden="true">
                                         ▾
                                     </span>
@@ -1304,17 +1344,17 @@ export function AkiraPlayer({
                             <div className="akira-episode-list">
                                 {episodesForSelectedSeason.map((ep) => {
                                     const isCurrent = !!episodeId && ep.id === episodeId;
+
+                                    // ✅ SIN cero a la izquierda
                                     const epLabel =
                                         ep.seasonNumber != null && ep.episodeNumber != null
-                                            ? `T${String(ep.seasonNumber).padStart(2, "0")} · E${String(ep.episodeNumber).padStart(2, "0")}`
+                                            ? `T${ep.seasonNumber} · E${ep.episodeNumber}`
                                             : ep.episodeNumber != null
-                                                ? `E${String(ep.episodeNumber).padStart(2, "0")}`
+                                                ? `E${ep.episodeNumber}`
                                                 : "Episodio";
 
-                                    // ✅ Usa thumbnails-episode (columna de DB) como prioridad
-                                    const episodeThumb = getEpisodeThumbSrc(ep);
+                                    const episodeThumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
 
-                                    // ✅ Progreso real desde Supabase
                                     const epProgress = episodeProgressMap[ep.id];
                                     const showEpisodeProgress = !!epProgress?.hasProgress;
 
@@ -1328,7 +1368,18 @@ export function AkiraPlayer({
                                         >
                                             <div className="akira-episode-thumb">
                                                 {episodeThumb ? (
-                                                    <img src={episodeThumb} alt="" loading="lazy" />
+                                                    <img
+                                                        src={episodeThumb}
+                                                        alt=""
+                                                        loading="lazy"
+                                                        onError={(e) => {
+                                                            const img = e.currentTarget;
+                                                            console.warn("[AkiraPlayer] Thumb episodio falló:", {
+                                                                episodeId: ep.id,
+                                                                src: img.currentSrc || img.src
+                                                            });
+                                                        }}
+                                                    />
                                                 ) : (
                                                     <div className="akira-thumb-empty" />
                                                 )}
@@ -1377,7 +1428,6 @@ export function AkiraPlayer({
                                                     )}
                                                 </div>
 
-                                                {/* Progressbar episodio visto (usa tu CSS .akira-episode-progress + gradiente) */}
                                                 {showEpisodeProgress && epProgress && (
                                                     <div
                                                         className="akira-episode-progress"
@@ -1409,7 +1459,6 @@ export function AkiraPlayer({
                 </div>
             )}
 
-            {/* Panel recomendado interno (opcional, si no usás callback externo) */}
             {showRecommendations && !onOpenRecommendations && (
                 <div
                     className="akira-modal akira-modal-reco"
@@ -1479,7 +1528,6 @@ export function AkiraPlayer({
                 </div>
             )}
 
-            {/* BOTTOM CONTROLS */}
             <div
                 className="akira-controls"
                 onMouseEnter={() => setControlsVisible(true)}
@@ -1487,7 +1535,6 @@ export function AkiraPlayer({
                     if (playing) showControlsTemporarily();
                 }}
             >
-                {/* Progress / scrubber */}
                 <div className="akira-progress-row">
                     <span className="akira-time">{fmtTime(currentTime)}</span>
 
@@ -1544,9 +1591,7 @@ export function AkiraPlayer({
                     <span className="akira-time">{fmtTime(duration)}</span>
                 </div>
 
-                {/* Toolbar LEFT / CENTER / RIGHT */}
                 <div className="akira-toolbar">
-                    {/* LEFT: Te podría gustar / Episodios (texto) */}
                     <div className="akira-left">
                         <button
                             type="button"
@@ -1582,7 +1627,6 @@ export function AkiraPlayer({
                         </button>
                     </div>
 
-                    {/* CENTER */}
                     <div className="akira-center-cluster">
                         <IconButton
                             onClick={() => seekBy(-10)}
@@ -1609,7 +1653,6 @@ export function AkiraPlayer({
                         />
                     </div>
 
-                    {/* RIGHT: Volume / Fullscreen */}
                     <div className="akira-right">
                         <div
                             className="akira-volume"
