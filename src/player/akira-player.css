@@ -128,7 +128,6 @@
 }
 
 .akira-feedback-pill {
-    backdrop-filter: blur(8px);
     background: rgba(0, 0, 0, .78);
     border: 1px solid hsla(0, 0%, 100%, .16);
     border-radius: 999px;
@@ -138,7 +137,6 @@
 }
 
 .akira-overlay-shell {
-    backdrop-filter: blur(2px);
     background: rgba(0, 0, 0, .42);
     inset: 0;
     position: absolute;
@@ -909,7 +907,6 @@ img.playSVG {
 }
 
 .akira-menu {
-    backdrop-filter: blur(8px);
     background: hsla(0, 0%, 5%, .96);
     border: 1px solid hsla(0, 0%, 100%, .08);
     border-radius: .25em;
@@ -1227,8 +1224,6 @@ img.playSVG {
 }
 
 .akira-season-dd-menu {
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     background: hsla(0, 0%, 5%, .96);
     border: 1px solid hsla(0, 0%, 100%, .08);
     border-radius: 12px;
