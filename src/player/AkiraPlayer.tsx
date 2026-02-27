@@ -1417,7 +1417,7 @@ export function AkiraPlayer({
                             }}
                         >
                             <div className="akira-modal-title">
-                                Episodios {episodes.length ? `(${episodesForSelectedSeason.length}/${episodes.length})` : ""}
+                                {displayContentTitle} · Listado de episodios
                             </div>
 
                             {/* Dropdown custom temporada */}
