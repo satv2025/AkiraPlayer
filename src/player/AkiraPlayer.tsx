@@ -198,8 +198,8 @@ function getIcons(assetBase: string) {
         fullscreen: `${base}/fullscreen.svg`,
         windowed: `${base}/windowed.svg`,
         episodes: `${base}/episodes.svg`,
-        previous: `${base}/previous.svg`, // ✅
-        next: `${base}/next.svg`,         // ✅
+        previous: `${base}/previous.svg`,
+        next: `${base}/next.svg`,
         volume: {
             mute: `${base}/volume/mute.svg`,
             vol0: `${base}/volume/vol0.svg`,
@@ -828,6 +828,125 @@ export function AkiraPlayer({
         }
     };
 
+    const clearEpisodeNavTimers = () => {
+        if (episodeNavOverlayHideTimerRef.current) {
+            window.clearTimeout(episodeNavOverlayHideTimerRef.current);
+            episodeNavOverlayHideTimerRef.current = null;
+        }
+        if (episodeNavCommitTimerRef.current) {
+            window.clearTimeout(episodeNavCommitTimerRef.current);
+            episodeNavCommitTimerRef.current = null;
+        }
+    };
+
+    const showEpisodeNavCard = (ep: EpisodeItem, direction: "prev" | "next") => {
+        const thumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
+
+        setEpisodeNavOverlay({
+            visible: true,
+            direction,
+            episode: ep,
+            thumb
+        });
+
+        if (episodeNavOverlayHideTimerRef.current) {
+            window.clearTimeout(episodeNavOverlayHideTimerRef.current);
+        }
+
+        episodeNavOverlayHideTimerRef.current = window.setTimeout(() => {
+            setEpisodeNavOverlay((prev) => (prev ? { ...prev, visible: false } : prev));
+        }, 1200);
+    };
+
+    const navigateEpisodeWithOverlay = (
+        ep: EpisodeItem | null | undefined,
+        direction: "prev" | "next"
+    ) => {
+        if (!ep || !onSelectEpisode) return;
+
+        clearEpisodeNavTimers();
+        showEpisodeNavCard(ep, direction);
+
+        episodeNavCommitTimerRef.current = window.setTimeout(() => {
+            playlistNextAutoplayRef.current = true;
+            onSelectEpisode(ep.id, ep);
+        }, 420);
+    };
+
+    const showEpisodeStepHover = (
+        ep: EpisodeItem | null | undefined,
+        direction: "prev" | "next"
+    ) => {
+        if (!ep) return;
+
+        // Si ya hay navegación en curso, no pisar overlay
+        if (episodeNavCommitTimerRef.current) return;
+
+        const thumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
+
+        setEpisodeNavOverlay({
+            visible: true,
+            direction,
+            episode: ep,
+            thumb
+        });
+    };
+
+    const hideEpisodeStepHover = (direction: "prev" | "next") => {
+        // Si hay navegación en curso, dejamos overlay hasta cambiar episodio
+        if (episodeNavCommitTimerRef.current) return;
+
+        setEpisodeNavOverlay((prev) => {
+            if (!prev) return null;
+            if (prev.direction !== direction) return prev;
+            return null;
+        });
+    };
+
+    const renderEpisodeStepPopover = (direction: "prev" | "next", ep: EpisodeItem | null) => {
+        if (!ep || !episodeNavOverlay) return null;
+        if (episodeNavOverlay.direction !== direction) return null;
+        if (episodeNavOverlay.episode?.id !== ep.id) return null;
+
+        return (
+            <div className={`akira-episode-step-popover ${episodeNavOverlay.visible ? "show" : ""}`} aria-hidden="true">
+                <div className="akira-episode-nav-thumb">
+                    {episodeNavOverlay.thumb ? (
+                        <img src={episodeNavOverlay.thumb} alt="" />
+                    ) : (
+                        <div className="akira-episode-nav-thumb-empty">Sin imagen</div>
+                    )}
+                </div>
+
+                <div className="akira-episode-nav-body">
+                    <div className="akira-episode-nav-kicker">
+                        {direction === "next" ? "Episodio siguiente" : "Episodio anterior"}
+                    </div>
+
+                    <div className="akira-episode-nav-title" title={episodeNavOverlay.episode.title}>
+                        {`T${episodeNavOverlay.episode.seasonNumber ?? "?"}E${episodeNavOverlay.episode.episodeNumber ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
+                    </div>
+
+                    {episodeNavOverlay.episode.synopsis ? (
+                        <div className="akira-episode-nav-synopsis">
+                            {episodeNavOverlay.episode.synopsis}
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+        );
+    };
+
+    const goPrevEpisode = () => {
+        if (!prevEpisodeInPlaylist) return;
+        navigateEpisodeWithOverlay(prevEpisodeInPlaylist, "prev");
+    };
+
+    const goNextEpisode = () => {
+        if (!nextEpisodeInPlaylist) return;
+        navigateEpisodeWithOverlay(nextEpisodeInPlaylist, "next");
+    };
+
     // ✅ Reset handshake cuando cambia reproducción
     useEffect(() => {
         setIsMediaHandshakeReady(false);
@@ -911,7 +1030,6 @@ export function AkiraPlayer({
             });
         };
 
-        // chequeo inmediato + micro delay (Hls attach/load puede completar justo después)
         markReadyIfApplies("effect-start");
         mediaReadyProbeTimerRef.current = window.setTimeout(() => {
             markReadyIfApplies("effect-probe-t+80ms");
@@ -973,7 +1091,6 @@ export function AkiraPlayer({
     }, [isPreparingUiVisible, isPreparingOverlayVisibleInDom, playbackHandshakeKey]);
 
     // ✅ Evento custom para handshake con watch.html/watch.js
-    // READY SOLO cuando boot + media + overlay removido del DOM
     useEffect(() => {
         if (typeof window === "undefined") return;
 
@@ -1311,7 +1428,6 @@ export function AkiraPlayer({
         const onMeta = () => {
             setDuration(v.duration || 0);
 
-            // Primer intento de autoplay (puede fallar si el navegador lo bloquea)
             if (autoplay || playlistNextAutoplayRef.current) {
                 v.play().catch((e) => {
                     console.warn("[AkiraPlayer][autoplay] onMeta bloqueado/no disponible:", e);
@@ -1366,7 +1482,7 @@ export function AkiraPlayer({
 
         if (autoplay) {
             v.play().catch(() => {
-                // noop (puede fallar antes de metadata)
+                // noop
             });
         }
 
@@ -1383,7 +1499,7 @@ export function AkiraPlayer({
         };
     }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode, isPlayerBootReady]);
 
-    // ✅ Autoplay reforzado POST-handshake (cuando ya desapareció "Preparando reproducción")
+    // ✅ Autoplay reforzado POST-handshake
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1415,7 +1531,6 @@ export function AkiraPlayer({
                 });
             }
 
-            // Fallback: autoplay muteado (suele funcionar)
             try {
                 v.muted = true;
                 await v.play();
@@ -1795,62 +1910,6 @@ export function AkiraPlayer({
         });
     }, [episodes, selectedSeasonNumber]);
 
-    const clearEpisodeNavTimers = () => {
-        if (episodeNavOverlayHideTimerRef.current) {
-            window.clearTimeout(episodeNavOverlayHideTimerRef.current);
-            episodeNavOverlayHideTimerRef.current = null;
-        }
-        if (episodeNavCommitTimerRef.current) {
-            window.clearTimeout(episodeNavCommitTimerRef.current);
-            episodeNavCommitTimerRef.current = null;
-        }
-    };
-
-    const showEpisodeNavCard = (ep: EpisodeItem, direction: "prev" | "next") => {
-        const thumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
-
-        setEpisodeNavOverlay({
-            visible: true,
-            direction,
-            episode: ep,
-            thumb
-        });
-
-        if (episodeNavOverlayHideTimerRef.current) {
-            window.clearTimeout(episodeNavOverlayHideTimerRef.current);
-        }
-
-        episodeNavOverlayHideTimerRef.current = window.setTimeout(() => {
-            setEpisodeNavOverlay((prev) => (prev ? { ...prev, visible: false } : prev));
-        }, 1200);
-    };
-
-    const navigateEpisodeWithOverlay = (
-        ep: EpisodeItem | null | undefined,
-        direction: "prev" | "next"
-    ) => {
-        if (!ep || !onSelectEpisode) return;
-
-        clearEpisodeNavTimers();
-        showEpisodeNavCard(ep, direction);
-
-        // pequeño delay para que se vea el overlay antes de cambiar episodio/ruta
-        episodeNavCommitTimerRef.current = window.setTimeout(() => {
-            playlistNextAutoplayRef.current = true;
-            onSelectEpisode(ep.id, ep);
-        }, 420);
-    };
-
-    const goPrevEpisode = () => {
-        if (!prevEpisodeInPlaylist) return;
-        navigateEpisodeWithOverlay(prevEpisodeInPlaylist, "prev");
-    };
-
-    const goNextEpisode = () => {
-        if (!nextEpisodeInPlaylist) return;
-        navigateEpisodeWithOverlay(nextEpisodeInPlaylist, "next");
-    };
-
     // Controls actions
     const togglePlay = () => {
         const v = videoRef.current;
@@ -1962,7 +2021,6 @@ export function AkiraPlayer({
         setSelectedSeasonNumber(nextSeason);
         setShowSeasonDropdown(false);
 
-        // Ya debería venir precargado por boot; esto solo revalida si cambió algo
         try {
             await hydrateEpisodesModalData();
         } catch {
@@ -2125,129 +2183,6 @@ export function AkiraPlayer({
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-feedback-pill">{feedback?.text ?? ""}</div>
             </div>
-
-            {/* OVERLAY navegación episodio (una sola card) */}
-            {episodeNavOverlay && (
-                <div
-                    aria-hidden="true"
-                    style={{
-                        position: "absolute",
-                        inset: 0,
-                        display: "grid",
-                        placeItems: "center",
-                        pointerEvents: "none",
-                        zIndex: 18
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "minmax(120px, 180px) minmax(220px, 520px)",
-                            gap: 16,
-                            alignItems: "center",
-                            width: "min(760px, calc(100vw - 32px))",
-                            padding: 14,
-                            borderRadius: 16,
-                            border: "1px solid rgba(255,255,255,.12)",
-                            background: "rgba(0,0,0,.78)",
-                            backdropFilter: "blur(10px)",
-                            boxShadow: "0 10px 30px rgba(0,0,0,.35)",
-                            transform: episodeNavOverlay.visible ? "translateY(0) scale(1)" : "translateY(8px) scale(.98)",
-                            opacity: episodeNavOverlay.visible ? 1 : 0,
-                            transition: "opacity .18s ease, transform .18s ease"
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: "100%",
-                                aspectRatio: "16 / 9",
-                                borderRadius: 12,
-                                overflow: "hidden",
-                                background: "rgba(255,255,255,.06)",
-                                border: "1px solid rgba(255,255,255,.08)"
-                            }}
-                        >
-                            {episodeNavOverlay.thumb ? (
-                                <img
-                                    src={episodeNavOverlay.thumb}
-                                    alt=""
-                                    style={{
-                                        width: "100%",
-                                        height: "100%",
-                                        objectFit: "cover",
-                                        display: "block"
-                                    }}
-                                />
-                            ) : (
-                                <div
-                                    style={{
-                                        width: "100%",
-                                        height: "100%",
-                                        display: "grid",
-                                        placeItems: "center",
-                                        color: "rgba(255,255,255,.55)",
-                                        fontSize: 12
-                                    }}
-                                >
-                                    Sin imagen
-                                </div>
-                            )}
-                        </div>
-
-                        <div
-                            style={{
-                                minWidth: 0,
-                                display: "grid",
-                                gap: 6,
-                                alignContent: "center"
-                            }}
-                        >
-                            <div
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    letterSpacing: ".04em",
-                                    textTransform: "uppercase",
-                                    color: "rgba(147,197,253,1)"
-                                }}
-                            >
-                                {episodeNavOverlay.direction === "next" ? "Episodio siguiente" : "Episodio anterior"}
-                            </div>
-
-                            <div
-                                style={{
-                                    fontSize: 16,
-                                    fontWeight: 700,
-                                    color: "#fff",
-                                    lineHeight: 1.25,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis"
-                                }}
-                                title={episodeNavOverlay.episode.title}
-                            >
-                                {`T${episodeNavOverlay.episode.seasonNumber ?? "?"}E${episodeNavOverlay.episode.episodeNumber ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
-                            </div>
-
-                            {episodeNavOverlay.episode.synopsis ? (
-                                <div
-                                    style={{
-                                        fontSize: 13,
-                                        lineHeight: 1.35,
-                                        color: "rgba(255,255,255,.82)",
-                                        display: "-webkit-box",
-                                        WebkitLineClamp: 3,
-                                        WebkitBoxOrient: "vertical",
-                                        overflow: "hidden"
-                                    }}
-                                >
-                                    {episodeNavOverlay.episode.synopsis}
-                                </div>
-                            ) : null}
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Backdrop paneles */}
             {(showEpisodes || showRecommendations) && (
@@ -2646,13 +2581,24 @@ export function AkiraPlayer({
 
                     <div className="akira-center-cluster">
                         {isSeriesContext && (
-                            <IconButton
-                                onClick={goPrevEpisode}
-                                icon={ICONS.previous}
-                                label="Episodio anterior"
-                                size="lg"
-                                disabled={!prevEpisodeInPlaylist || !onSelectEpisode}
-                            />
+                            <div
+                                className="akira-episode-step-wrap is-prev"
+                                onMouseEnter={() => showEpisodeStepHover(prevEpisodeInPlaylist, "prev")}
+                                onMouseLeave={() => hideEpisodeStepHover("prev")}
+                                onFocus={() => showEpisodeStepHover(prevEpisodeInPlaylist, "prev")}
+                                onBlur={() => hideEpisodeStepHover("prev")}
+                            >
+                                {renderEpisodeStepPopover("prev", prevEpisodeInPlaylist)}
+
+                                <IconButton
+                                    onClick={goPrevEpisode}
+                                    icon={ICONS.previous}
+                                    label="Episodio anterior"
+                                    size="lg"
+                                    disabled={!prevEpisodeInPlaylist || !onSelectEpisode}
+                                    className="episodeStepBtn"
+                                />
+                            </div>
                         )}
 
                         <IconButton
@@ -2680,13 +2626,24 @@ export function AkiraPlayer({
                         />
 
                         {isSeriesContext && (
-                            <IconButton
-                                onClick={goNextEpisode}
-                                icon={ICONS.next}
-                                label="Episodio siguiente"
-                                size="lg"
-                                disabled={!nextEpisodeInPlaylist || !onSelectEpisode}
-                            />
+                            <div
+                                className="akira-episode-step-wrap is-next"
+                                onMouseEnter={() => showEpisodeStepHover(nextEpisodeInPlaylist, "next")}
+                                onMouseLeave={() => hideEpisodeStepHover("next")}
+                                onFocus={() => showEpisodeStepHover(nextEpisodeInPlaylist, "next")}
+                                onBlur={() => hideEpisodeStepHover("next")}
+                            >
+                                {renderEpisodeStepPopover("next", nextEpisodeInPlaylist)}
+
+                                <IconButton
+                                    onClick={goNextEpisode}
+                                    icon={ICONS.next}
+                                    label="Episodio siguiente"
+                                    size="lg"
+                                    disabled={!nextEpisodeInPlaylist || !onSelectEpisode}
+                                    className="episodeStepBtn"
+                                />
+                            </div>
                         )}
                     </div>
 

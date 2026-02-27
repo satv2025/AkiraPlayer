@@ -1536,3 +1536,8 @@ img.playSVG {
     line-clamp: 2;
   }
 }
+
+.akira-center-cluster .akira-icon-btn.lg img {
+    width: 67px;
+    height: auto;
+}
