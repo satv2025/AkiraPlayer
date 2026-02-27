@@ -690,6 +690,7 @@
     height: 18px;
     min-width: 18px;
     padding: 0 6px;
+    display: none !important;
 }
 
 .akira-ghost-btn,
