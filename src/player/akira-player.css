@@ -128,6 +128,7 @@
 }
 
 .akira-feedback-pill {
+    backdrop-filter: blur(8px);
     background: rgba(0, 0, 0, .78);
     border: 1px solid hsla(0, 0%, 100%, .16);
     border-radius: 999px;
@@ -137,11 +138,12 @@
 }
 
 .akira-overlay-shell {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     background: rgba(0, 0, 0, .42);
     inset: 0;
     position: absolute;
     z-index: 15;
-    /* poco blur */
 }
 
 .akira-modal {
@@ -913,6 +915,7 @@ img.playSVG {
 }
 
 .akira-menu {
+    backdrop-filter: blur(8px);
     background: hsla(0, 0%, 5%, .96);
     border: 1px solid hsla(0, 0%, 100%, .08);
     border-radius: .25em;
@@ -1170,15 +1173,139 @@ img.playSVG {
     ;
 }
 
-.akira-wrap:-webkit-full-screen .akira-video,
-.akira-wrap:fullscreen .akira-video {
-    aspect-ratio: auto;
-    height: 100%;
-    object-fit: contain;
-    width: 100%;
+/* ================================
+   Dropdown custom de temporada
+   (modal episodios)
+================================ */
+.akira-season-dd {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    z-index: 2;
 }
 
-/* Progressbar de episodio visto (modal episodios) */
+.akira-season-dd-label {
+    color: rgba(255, 255, 255, .88);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.akira-season-dd-trigger {
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 88px;
+    height: 34px;
+    padding: 0 10px;
+
+    display: inline-flex;
+    background: hsla(0, 0%, 100%, .06);
+    color: #fff;
+    border: 1px solid hsla(0, 0%, 100%, .12);
+    border-radius: 8px;
+    cursor: pointer;
+
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+}
+
+.akira-season-dd-trigger:hover {
+    background: hsla(0, 0%, 100%, .1);
+    border-color: hsla(0, 0%, 100%, .2);
+}
+
+.akira-season-dd-trigger:active {
+    transform: scale(.985);
+}
+
+.akira-season-dd-trigger.open {
+    background: hsla(0, 0%, 100%, .12);
+    border-color: hsla(0, 0%, 100%, .22);
+}
+
+.akira-season-dd-caret {
+    line-height: 1;
+    opacity: .9;
+    transition: transform .15s ease;
+}
+
+.akira-season-dd-trigger.open .akira-season-dd-caret {
+    transform: rotate(180deg);
+}
+
+.akira-season-dd-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 30;
+
+    min-width: 220px;
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+
+    border-radius: 12px;
+    border: 1px solid hsla(0, 0%, 100%, .08);
+    background: hsla(0, 0%, 5%, .96);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .38);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.akira-season-dd-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+
+    text-align: left;
+    background: transparent;
+    color: #fff;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+
+    transition: background .15s ease, border-color .15s ease, transform .08s ease;
+}
+
+.akira-season-dd-item:hover {
+    background: hsla(0, 0%, 100%, .06);
+    border-color: hsla(0, 0%, 100%, .08);
+}
+
+.akira-season-dd-item:active {
+    transform: scale(.995);
+}
+
+.akira-season-dd-item.active {
+    background: linear-gradient(180deg, rgba(37, 99, 235, .12), hsla(0, 0%, 100%, .02));
+    border-color: rgba(37, 99, 235, .35);
+}
+
+.akira-season-dd-item-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.akira-season-dd-check {
+    color: #93c5fd;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+/* ================================
+   Progressbar por episodio visto
+   (usa el gradiente del player)
+================================ */
 .akira-episode-progress {
     position: relative;
     width: 100%;
@@ -1191,7 +1318,8 @@ img.playSVG {
 .akira-episode-progress-track,
 .akira-episode-progress-fill {
     position: absolute;
-    inset: 0 auto 0 0;
+    top: 0;
+    left: 0;
     height: 100%;
 }
 
@@ -1205,4 +1333,45 @@ img.playSVG {
     background: var(--akira-grad, linear-gradient(90deg, #00eaff, #2563eb));
     border-radius: inherit;
     transition: width .18s ease;
+}
+
+/* Opcional: cuando está current, un toque más visible */
+.akira-episode-card.current .akira-episode-progress {
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, .12);
+}
+
+/* ================================
+   Responsive mínimo para dropdown
+================================ */
+@media (max-width: 780px) {
+    .akira-season-dd {
+        gap: 6px;
+    }
+
+    .akira-season-dd-label {
+        font-size: 12px;
+    }
+
+    .akira-season-dd-trigger {
+        min-width: 74px;
+        height: 32px;
+        padding: 0 8px;
+        font-size: 12px;
+        border-radius: 8px;
+    }
+
+    .akira-season-dd-menu {
+        min-width: 180px;
+        padding: 6px;
+        border-radius: 10px;
+    }
+
+    .akira-season-dd-item {
+        padding: 9px 10px;
+        border-radius: 8px;
+    }
+
+    .akira-season-dd-item-text {
+        font-size: 12px;
+    }
 }
