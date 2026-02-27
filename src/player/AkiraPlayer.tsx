@@ -1545,7 +1545,29 @@ export function AkiraPlayer({
                                                 ) : (
                                                     <div className="akira-thumb-empty" />
                                                 )}
+
                                                 <span className="akira-episode-badge">{epLabel}</span>
+
+                                                {showEpisodeProgress && epProgress && (
+                                                    <div
+                                                        className="akira-episode-thumb-progress"
+                                                        aria-label={
+                                                            epProgress.completed
+                                                                ? "Episodio visto"
+                                                                : `Progreso ${Math.round(epProgress.percent)}%`
+                                                        }
+                                                        title={
+                                                            epProgress.durationSeconds > 0
+                                                                ? `${fmtTime(epProgress.positionSeconds)} / ${fmtTime(epProgress.durationSeconds)}`
+                                                                : `${Math.round(epProgress.percent)}%`
+                                                        }
+                                                    >
+                                                        <div
+                                                            className="akira-episode-thumb-progress-fill"
+                                                            style={{ width: `${epProgress.percent}%` }}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="akira-episode-info">
@@ -1577,40 +1599,7 @@ export function AkiraPlayer({
                                                             {fmtTime(ep.durationSeconds)}
                                                         </div>
                                                     )}
-
-                                                    {showEpisodeProgress && epProgress && (
-                                                        <div
-                                                            className="akira-episode-meta"
-                                                            style={{ color: "hsla(0,0%,100%,.78)" }}
-                                                        >
-                                                            {epProgress.completed
-                                                                ? "Visto"
-                                                                : `Visto ${Math.round(epProgress.percent)}%`}
-                                                        </div>
-                                                    )}
                                                 </div>
-
-                                                {showEpisodeProgress && epProgress && (
-                                                    <div
-                                                        className="akira-episode-progress"
-                                                        aria-label={
-                                                            epProgress.completed
-                                                                ? "Episodio visto"
-                                                                : `Progreso ${Math.round(epProgress.percent)}%`
-                                                        }
-                                                        title={
-                                                            epProgress.durationSeconds > 0
-                                                                ? `${fmtTime(epProgress.positionSeconds)} / ${fmtTime(epProgress.durationSeconds)}`
-                                                                : `${Math.round(epProgress.percent)}%`
-                                                        }
-                                                    >
-                                                        <div className="akira-episode-progress-track" />
-                                                        <div
-                                                            className="akira-episode-progress-fill"
-                                                            style={{ width: `${epProgress.percent}%` }}
-                                                        />
-                                                    </div>
-                                                )}
                                             </div>
                                         </button>
                                     );
