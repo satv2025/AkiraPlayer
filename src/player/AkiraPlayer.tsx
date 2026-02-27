@@ -107,6 +107,8 @@ type ProgressRowLike = {
     episodeId?: string | null;
     position_seconds?: number | string | null;
     duration_seconds?: number | string | null;
+    movie_id?: string | null;
+    episode_id_db?: string | null;
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -218,21 +220,25 @@ function readProgressRowMeta(row: ProgressRowLike | null | undefined) {
         row.content_id != null
             ? String(row.content_id)
             : row.contentId != null
-                ? String(row.contentId)
+              ? String(row.contentId)
+              : (row as any).movie_id != null
+                ? String((row as any).movie_id)
                 : null;
 
     const seasonId =
         row.season_id != null
             ? String(row.season_id)
             : row.seasonId != null
-                ? String(row.seasonId)
-                : null;
+              ? String(row.seasonId)
+              : null;
 
     const episodeId =
         row.episode_id != null
             ? String(row.episode_id)
             : row.episodeId != null
-                ? String(row.episodeId)
+              ? String(row.episodeId)
+              : (row as any).episode_id_db != null
+                ? String((row as any).episode_id_db)
                 : null;
 
     return { contentId, seasonId, episodeId };
@@ -920,10 +926,10 @@ export function AkiraPlayer({
                     fatal: data?.fatal,
                     response: data?.response
                         ? {
-                            code: data.response.code,
-                            text: data.response.text,
-                            url: data.response.url
-                        }
+                              code: data.response.code,
+                              text: data.response.text,
+                              url: data.response.url
+                          }
                         : null,
                     reason: (data as any)?.reason || null
                 });
@@ -1801,8 +1807,8 @@ export function AkiraPlayer({
                                         ep.seasonNumber != null && ep.episodeNumber != null
                                             ? `T${ep.seasonNumber} · E${ep.episodeNumber}`
                                             : ep.episodeNumber != null
-                                                ? `E${ep.episodeNumber}`
-                                                : "Episodio";
+                                              ? `E${ep.episodeNumber}`
+                                              : "Episodio";
 
                                     const episodeThumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
 
@@ -1950,8 +1956,8 @@ export function AkiraPlayer({
                                                     {item.type === "series"
                                                         ? "Serie"
                                                         : item.type === "movie"
-                                                            ? "Película"
-                                                            : item.type}
+                                                          ? "Película"
+                                                          : item.type}
                                                 </span>
                                             )}
                                         </div>

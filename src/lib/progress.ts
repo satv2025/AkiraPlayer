@@ -41,13 +41,13 @@ type WatchProgressRow = {
   duration_seconds?: number | null;
 };
 
-type AkiraProgressRowShape = {
+export type AkiraProgressRowShape = {
   // Shape que espera AkiraPlayer hoy
   position_seconds: number;
   duration_seconds: number;
   updated_at?: string | null;
 
-  // extras
+  // extras útiles para validación estricta en frontend
   movie_id?: string;
   episode_id?: string | null;
 };
@@ -183,12 +183,17 @@ async function selectLatestProgressForMovie(params: {
 
 /**
  * loadProgress()
+ * ✅ EXACTO (sin fallback al "último episodio de la serie")
+ *
  * Devuelve shape compatible con AkiraPlayer:
  * {
  *   position_seconds,
  *   duration_seconds,
  *   updated_at
  * }
+ *
+ * - Película: busca (user_id, movie_id, episode_id IS NULL)
+ * - Serie:    busca (user_id, movie_id, episode_id = exacto)
  */
 export async function loadProgress(args: LoadProgressArgs): Promise<AkiraProgressRowShape | null> {
   const { contentId, episodeId = null } = args || {};
@@ -211,15 +216,6 @@ export async function loadProgress(args: LoadProgressArgs): Promise<AkiraProgres
           withDuration: true
         });
 
-        // Fallback útil para series: si no hay exacto, usar último episodio visto de esa serie
-        if (!row && episodeId) {
-          row = await selectLatestProgressForMovie({
-            userId,
-            movieId: contentId,
-            withDuration: true
-          });
-        }
-
         return normalizeLoadedRow(row);
       } catch (e: any) {
         if (!isMissingDurationColumnError(e)) throw e;
@@ -235,17 +231,52 @@ export async function loadProgress(args: LoadProgressArgs): Promise<AkiraProgres
       withDuration: false
     });
 
-    if (!row && episodeId) {
-      row = await selectLatestProgressForMovie({
-        userId,
-        movieId: contentId,
-        withDuration: false
-      });
-    }
-
     return normalizeLoadedRow(row);
   } catch (e) {
     console.warn("[progress] loadProgress error:", e);
+    return null;
+  }
+}
+
+/**
+ * loadLatestSeriesProgress()
+ * ✅ Devuelve el ÚLTIMO progreso de una serie (cualquier episodio)
+ *
+ * Usar para "Continuar viendo" / Home / card de serie.
+ * NO usar para hidratar progreso por episodio en el modal.
+ */
+export async function loadLatestSeriesProgress(contentId: string): Promise<AkiraProgressRowShape | null> {
+  if (!isUuidLike(contentId)) return null;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  try {
+    let row: any | null = null;
+
+    if (TRY_DURATION_COLUMN) {
+      try {
+        row = await selectLatestProgressForMovie({
+          userId,
+          movieId: contentId,
+          withDuration: true
+        });
+        return normalizeLoadedRow(row);
+      } catch (e: any) {
+        if (!isMissingDurationColumnError(e)) throw e;
+        console.warn("[progress] duration_seconds no existe; continúo sin esa columna (latest series)");
+      }
+    }
+
+    row = await selectLatestProgressForMovie({
+      userId,
+      movieId: contentId,
+      withDuration: false
+    });
+
+    return normalizeLoadedRow(row);
+  } catch (e) {
+    console.warn("[progress] loadLatestSeriesProgress error:", e);
     return null;
   }
 }
