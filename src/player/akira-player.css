@@ -124,7 +124,7 @@
 }
 
 .akira-feedback.show {
-    opacity: 1;
+    opacity: 0;
 }
 
 .akira-feedback-pill {
@@ -1179,4 +1179,33 @@ img.playSVG {
     height: 100%;
     object-fit: contain;
     width: 100%;
+}
+
+/* Progressbar de episodio visto (modal episodios) */
+.akira-episode-progress {
+    position: relative;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.akira-episode-progress-track,
+.akira-episode-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    height: 100%;
+}
+
+.akira-episode-progress-track {
+    width: 100%;
+    background: var(--akira-track, hsla(0, 0%, 100%, .24));
+}
+
+.akira-episode-progress-fill {
+    width: 0;
+    background: var(--akira-grad, linear-gradient(90deg, #00eaff, #2563eb));
+    border-radius: inherit;
+    transition: width .18s ease;
 }

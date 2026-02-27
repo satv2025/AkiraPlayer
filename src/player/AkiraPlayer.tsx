@@ -22,7 +22,20 @@ type EpisodeItem = {
     id: string;
     title: string;
     synopsis?: string | null;
+
+    /** Compat viejo */
     thumbnail?: string | null;
+
+    /** Recomendado (alias limpio desde backend) */
+    thumbnailEpisode?: string | null;
+
+    /** Columna literal de DB si viene así en el objeto */
+    "thumbnails-episode"?: string | null;
+
+    /** Compat snake_case si te llega así */
+    thumbnails_episode?: string | null;
+
+    seasonId?: string | null;
     seasonNumber?: number | null;
     episodeNumber?: number | null;
     durationSeconds?: number | null;
@@ -61,6 +74,18 @@ type Props = {
     recommendationsLabel?: string;
 };
 
+type EpisodeProgressInfo = {
+    positionSeconds: number;
+    durationSeconds: number;
+    percent: number;
+    hasProgress: boolean;
+    completed: boolean;
+};
+
+function clamp(n: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, n));
+}
+
 function fmtTime(seconds: number): string {
     if (!Number.isFinite(seconds)) return "00:00";
     const s = Math.max(0, Math.floor(seconds));
@@ -72,6 +97,19 @@ function fmtTime(seconds: number): string {
         return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
     }
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function getEpisodeThumbSrc(ep: EpisodeItem): string | null {
+    const src =
+        ep["thumbnails-episode"] ??
+        ep.thumbnailEpisode ??
+        ep.thumbnails_episode ??
+        ep.thumbnail ??
+        null;
+
+    if (!src) return null;
+    const trimmed = String(src).trim();
+    return trimmed.length ? trimmed : null;
 }
 
 function getIcons(assetBase: string) {
@@ -166,6 +204,12 @@ export function AkiraPlayer({
     // Layout left panels
     const [showEpisodes, setShowEpisodes] = useState(false);
     const [showRecommendations, setShowRecommendations] = useState(false);
+
+    // 👇 Temporada seleccionada (dropdown episodios)
+    const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number>(1);
+
+    // 👇 Progreso por episodio (modal episodios)
+    const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<string, EpisodeProgressInfo>>({});
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -569,6 +613,84 @@ export function AkiraPlayer({
     }, [contentId, seasonId, episodeId]);
 
     // ----------------------------
+    // Cargar progreso para TODOS los episodios (modal)
+    // ----------------------------
+    useEffect(() => {
+        if (!showEpisodes) return;
+        if (!episodes.length) {
+            setEpisodeProgressMap({});
+            return;
+        }
+
+        let cancelled = false;
+
+        (async () => {
+            const entries = await Promise.all(
+                episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
+                    let row: any = null;
+
+                    // Probamos distintas combinaciones por compat (seasonId actual / seasonId del episodio / null)
+                    const seasonCandidates = Array.from(
+                        new Set<(string | null | undefined)>([
+                            ep.seasonId ?? undefined,
+                            seasonId ?? undefined,
+                            undefined
+                        ])
+                    );
+
+                    for (const sId of seasonCandidates) {
+                        try {
+                            row = await loadProgress({
+                                contentId,
+                                seasonId: sId ?? null,
+                                episodeId: ep.id
+                            });
+                        } catch {
+                            row = null;
+                        }
+                        if (row) break;
+                    }
+
+                    const positionSeconds = Number((row as any)?.position_seconds || 0);
+                    const rowDuration = Number((row as any)?.duration_seconds || 0);
+                    const fallbackDuration = Number(ep.durationSeconds || 0);
+                    const durationSeconds = rowDuration > 0 ? rowDuration : fallbackDuration;
+
+                    const percent =
+                        durationSeconds > 0
+                            ? clamp((positionSeconds / durationSeconds) * 100, 0, 100)
+                            : 0;
+
+                    const completed =
+                        durationSeconds > 0 &&
+                        durationSeconds - positionSeconds <= (CONFIG.NEAR_END_SECONDS ?? 45);
+
+                    const hasProgress = positionSeconds > 0;
+
+                    return [
+                        ep.id,
+                        {
+                            positionSeconds,
+                            durationSeconds,
+                            percent,
+                            hasProgress,
+                            completed
+                        }
+                    ];
+                })
+            );
+
+            if (!cancelled) {
+                setEpisodeProgressMap(Object.fromEntries(entries));
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [showEpisodes, episodes, contentId, seasonId]);
+
+    // ----------------------------
     // Thumbnails VTT (hover preview)
     // ----------------------------
     useEffect(() => {
@@ -711,6 +833,17 @@ export function AkiraPlayer({
     const hasEpisodes = episodes.length > 0;
     const hasRecommendations = recommendations.length > 0;
 
+    // 👇 Dropdown fijo 1/2 (pedido)
+    const seasonDropdownOptions = useMemo(() => [1, 2], []);
+
+    // 👇 Filtrado de episodios por temporada seleccionada
+    const episodesForSelectedSeason = useMemo(() => {
+        return episodes.filter((ep) => {
+            const epSeason = ep.seasonNumber ?? 1;
+            return epSeason === selectedSeasonNumber;
+        });
+    }, [episodes, selectedSeasonNumber]);
+
     // ----------------------------
     // Controls actions
     // ----------------------------
@@ -816,6 +949,12 @@ export function AkiraPlayer({
 
     const openEpisodesPanel = () => {
         closeFloatingPanels();
+
+        // Preseleccionar temporada según episodio actual (si existe)
+        const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
+        const nextSeason = currentEpisode?.seasonNumber === 2 ? 2 : 1;
+        setSelectedSeasonNumber(nextSeason);
+
         setShowEpisodes(true);
         showControlsTemporarily();
     };
@@ -967,8 +1106,52 @@ export function AkiraPlayer({
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="akira-modal-header">
-                        <div className="akira-modal-title">
-                            Episodios {episodes.length ? `(${episodes.length})` : ""}
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                minWidth: 0,
+                                flexWrap: "wrap"
+                            }}
+                        >
+                            <div className="akira-modal-title">
+                                Episodios {episodes.length ? `(${episodesForSelectedSeason.length}/${episodes.length})` : ""}
+                            </div>
+
+                            {/* Dropdown temporada 1 / 2 */}
+                            <label
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    color: "rgba(255,255,255,.88)",
+                                    fontSize: 13,
+                                    fontWeight: 600
+                                }}
+                            >
+                                <span>Temporada</span>
+                                <select
+                                    value={selectedSeasonNumber}
+                                    onChange={(e) => setSelectedSeasonNumber(Number(e.target.value))}
+                                    aria-label="Seleccionar temporada"
+                                    style={{
+                                        background: "hsla(0,0%,100%,.06)",
+                                        color: "#fff",
+                                        border: "1px solid hsla(0,0%,100%,.12)",
+                                        borderRadius: 8,
+                                        height: 34,
+                                        padding: "0 10px",
+                                        cursor: "pointer"
+                                    }}
+                                >
+                                    {seasonDropdownOptions.map((s) => (
+                                        <option key={s} value={s} style={{ color: "#000" }}>
+                                            T{s}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
                         </div>
 
                         <button
@@ -990,9 +1173,13 @@ export function AkiraPlayer({
                             <div className="akira-empty-state">
                                 No hay episodios cargados todavía.
                             </div>
+                        ) : episodesForSelectedSeason.length === 0 ? (
+                            <div className="akira-empty-state">
+                                No hay episodios cargados para la temporada {selectedSeasonNumber}.
+                            </div>
                         ) : (
                             <div className="akira-episode-list">
-                                {episodes.map((ep) => {
+                                {episodesForSelectedSeason.map((ep) => {
                                     const isCurrent = !!episodeId && ep.id === episodeId;
                                     const epLabel =
                                         ep.seasonNumber != null && ep.episodeNumber != null
@@ -1000,6 +1187,12 @@ export function AkiraPlayer({
                                             : ep.episodeNumber != null
                                                 ? `E${String(ep.episodeNumber).padStart(2, "0")}`
                                                 : "Episodio";
+
+                                    // ✅ Usa thumbnails-episode (columna de DB) como prioridad
+                                    const episodeThumb = getEpisodeThumbSrc(ep);
+
+                                    const epProgress = episodeProgressMap[ep.id];
+                                    const showEpisodeProgress = !!epProgress?.hasProgress;
 
                                     return (
                                         <button
@@ -1010,8 +1203,8 @@ export function AkiraPlayer({
                                             title={ep.title}
                                         >
                                             <div className="akira-episode-thumb">
-                                                {ep.thumbnail ? (
-                                                    <img src={ep.thumbnail} alt="" loading="lazy" />
+                                                {episodeThumb ? (
+                                                    <img src={episodeThumb} alt="" loading="lazy" />
                                                 ) : (
                                                     <div className="akira-thumb-empty" />
                                                 )}
@@ -1034,9 +1227,52 @@ export function AkiraPlayer({
                                                     </div>
                                                 )}
 
-                                                {ep.durationSeconds != null && ep.durationSeconds > 0 && (
-                                                    <div className="akira-episode-meta">
-                                                        {fmtTime(ep.durationSeconds)}
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 10,
+                                                        flexWrap: "wrap"
+                                                    }}
+                                                >
+                                                    {ep.durationSeconds != null && ep.durationSeconds > 0 && (
+                                                        <div className="akira-episode-meta">
+                                                            {fmtTime(ep.durationSeconds)}
+                                                        </div>
+                                                    )}
+
+                                                    {showEpisodeProgress && epProgress && (
+                                                        <div
+                                                            className="akira-episode-meta"
+                                                            style={{ color: "hsla(0,0%,100%,.78)" }}
+                                                        >
+                                                            {epProgress.completed
+                                                                ? "Visto"
+                                                                : `Visto ${Math.round(epProgress.percent)}%`}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* ✅ Progressbar episodio visto (usa gradiente del player) */}
+                                                {showEpisodeProgress && epProgress && (
+                                                    <div
+                                                        className="akira-episode-progress"
+                                                        aria-label={
+                                                            epProgress.completed
+                                                                ? "Episodio visto"
+                                                                : `Progreso ${Math.round(epProgress.percent)}%`
+                                                        }
+                                                        title={
+                                                            epProgress.durationSeconds > 0
+                                                                ? `${fmtTime(epProgress.positionSeconds)} / ${fmtTime(epProgress.durationSeconds)}`
+                                                                : `${Math.round(epProgress.percent)}%`
+                                                        }
+                                                    >
+                                                        <div className="akira-episode-progress-track" />
+                                                        <div
+                                                            className="akira-episode-progress-fill"
+                                                            style={{ width: `${epProgress.percent}%` }}
+                                                        />
                                                     </div>
                                                 )}
                                             </div>
