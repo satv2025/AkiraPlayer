@@ -46,13 +46,13 @@ type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string;
+    title?: string; // nombre de peli/serie actual (compat)
     channelLabel?: string;
 
     assetBase?: string;
     assetBaseUrl?: string;
 
-    contentId: string;
+    contentId: string; // ID de serie o peli abierta
     seasonId?: string | null;
     episodeId?: string | null;
 
@@ -106,7 +106,31 @@ function fmtTime(seconds: number): string {
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function pickEpisodeThumbValue(obj: Partial<EpisodeItem> | Partial<EpisodesThumbDbRow> | null | undefined): string | null {
+function normalizeMaybeRelativeUrl(input: string): string {
+    const value = String(input || "").trim();
+    if (!value) return value;
+
+    if (/^(https?:|data:|blob:)/i.test(value)) return value;
+
+    if (value.startsWith("//")) {
+        if (typeof window !== "undefined") return `${window.location.protocol}${value}`;
+        return `https:${value}`;
+    }
+
+    try {
+        if (typeof window !== "undefined") {
+            return new URL(value, window.location.origin).toString();
+        }
+    } catch {
+        // noop
+    }
+
+    return value;
+}
+
+function pickEpisodeThumbValue(
+    obj: Partial<EpisodeItem> | Partial<EpisodesThumbDbRow> | null | undefined
+): string | null {
     if (!obj) return null;
 
     const src =
@@ -118,11 +142,13 @@ function pickEpisodeThumbValue(obj: Partial<EpisodeItem> | Partial<EpisodesThumb
 
     if (!src) return null;
     const trimmed = String(src).trim();
-    return trimmed.length ? trimmed : null;
+    if (!trimmed.length) return null;
+
+    return normalizeMaybeRelativeUrl(trimmed);
 }
 
 function getEpisodeThumbSrc(ep: EpisodeItem, hydratedThumb?: string | null): string | null {
-    return pickEpisodeThumbValue(ep) ?? (hydratedThumb ? String(hydratedThumb).trim() || null : null);
+    return pickEpisodeThumbValue(ep) ?? (hydratedThumb ? normalizeMaybeRelativeUrl(hydratedThumb) : null);
 }
 
 function getIcons(assetBase: string) {
@@ -159,10 +185,6 @@ function isSafariLikeForNativeHls(): boolean {
     return isIOS || isSafariDesktop;
 }
 
-/**
- * ✅ Progreso real por episodio usando loadProgress()
- * (evita asumir nombres de columnas en watch_progress)
- */
 async function loadEpisodesProgressReal(params: {
     contentId: string;
     seasonId?: string | null;
@@ -177,7 +199,6 @@ async function loadEpisodesProgressReal(params: {
         episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
             let row: any = null;
 
-            // Probamos con season del episodio y fallback al season actual
             const seasonCandidates = Array.from(
                 new Set<(string | null | undefined)>([
                     ep.seasonId ?? undefined,
@@ -231,10 +252,6 @@ async function loadEpisodesProgressReal(params: {
     return Object.fromEntries(entries);
 }
 
-/**
- * ✅ Hidrata thumbs desde Supabase si no vinieron en props.episodes
- * Tabla por defecto: "episodes"
- */
 async function loadEpisodeThumbsFromSupabase(params: {
     episodes: EpisodeItem[];
 }): Promise<Record<string, string>> {
@@ -250,7 +267,6 @@ async function loadEpisodeThumbsFromSupabase(params: {
 
     const episodesTable = String((CONFIG as any)?.EPISODES_TABLE || "episodes");
 
-    // Intento 1: columna literal con guion
     let data: EpisodesThumbDbRow[] | null = null;
     let err: any = null;
 
@@ -267,7 +283,6 @@ async function loadEpisodeThumbsFromSupabase(params: {
         data = null;
     }
 
-    // Intento 2: snake_case / alias
     if (err || !data) {
         try {
             const r2 = await (supabase as any)
@@ -320,7 +335,6 @@ export function AkiraPlayer({
     onSelectEpisode,
     recommendationsLabel = "Te podría gustar"
 }: Props) {
-    void title;
     void channelLabel;
 
     const resolvedAssetBase = (assetBaseUrl || assetBase || "/assets").replace(/\/$/, "");
@@ -351,9 +365,7 @@ export function AkiraPlayer({
     const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number>(1);
     const [showSeasonDropdown, setShowSeasonDropdown] = useState(false);
 
-    // ✅ progreso real de episodios (desde loadProgress/Supabase)
     const [episodeProgressMap, setEpisodeProgressMap] = useState<Record<string, EpisodeProgressInfo>>({});
-    // ✅ thumbs hidratados desde Supabase/episodes
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
 
     const [currentTime, setCurrentTime] = useState(0);
@@ -416,9 +428,65 @@ export function AkiraPlayer({
         setShowSeasonDropdown(false);
     };
 
-    // ----------------------------
+    const isSeriesContext = useMemo(() => {
+        if (typeof window === "undefined") return Boolean(episodeId);
+        try {
+            const sp = new URLSearchParams(window.location.search);
+            if (sp.has("series")) return true;
+            if (sp.has("movie")) return false;
+        } catch {
+            // noop
+        }
+        return Boolean(episodeId);
+    }, [episodeId]);
+
+    const currentEpisodeData = useMemo(() => {
+        if (!episodeId) return null;
+        return episodes.find((ep) => ep.id === episodeId) ?? null;
+    }, [episodes, episodeId]);
+
+    const topMetaEpisodeLine = useMemo(() => {
+        if (!isSeriesContext) return "";
+        const s = currentEpisodeData?.seasonNumber ?? (selectedSeasonNumber || undefined);
+        const e = currentEpisodeData?.episodeNumber;
+        const epTitle = currentEpisodeData?.title?.trim() || "";
+
+        if (s != null && e != null) return `Temporada ${s} · E${e}${epTitle ? ` ${epTitle}` : ""}`;
+        if (s != null && epTitle) return `Temporada ${s} · ${epTitle}`;
+        if (epTitle) return epTitle;
+        return "";
+    }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
+
+    const goBackToOpenedTitle = () => {
+        if (onBack) {
+            onBack();
+            return;
+        }
+
+        try {
+            const current = new URL(window.location.href);
+            const sp = current.searchParams;
+
+            let targetUrl = "";
+            if (sp.has("series") || isSeriesContext) {
+                targetUrl = `/title?series=${encodeURIComponent(contentId)}`;
+            } else if (sp.has("movie")) {
+                targetUrl = `/title?movie=${encodeURIComponent(contentId)}`;
+            } else {
+                targetUrl = `/title?id=${encodeURIComponent(contentId)}`;
+            }
+
+            window.location.assign(targetUrl);
+        } catch {
+            window.location.assign(
+                isSeriesContext
+                    ? `/title?series=${encodeURIComponent(contentId)}`
+                    : `/title?id=${encodeURIComponent(contentId)}`
+            );
+        }
+    };
+
     // HLS setup
-    // ----------------------------
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !src) return;
@@ -540,9 +608,7 @@ export function AkiraPlayer({
         };
     }, [src]);
 
-    // ----------------------------
     // Video events
-    // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -625,9 +691,7 @@ export function AkiraPlayer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoplay]);
 
-    // ----------------------------
     // Fullscreen state
-    // ----------------------------
     useEffect(() => {
         const onFsChange = () => {
             setIsFullscreen(Boolean(document.fullscreenElement));
@@ -637,9 +701,7 @@ export function AkiraPlayer({
         return () => document.removeEventListener("fullscreenchange", onFsChange);
     }, []);
 
-    // ----------------------------
     // Continue Watching (load episodio actual)
-    // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -682,9 +744,7 @@ export function AkiraPlayer({
         };
     }, [duration, contentId, seasonId, episodeId]);
 
-    // ----------------------------
     // Continue Watching (throttled save)
-    // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -710,9 +770,7 @@ export function AkiraPlayer({
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
     }, [contentId, seasonId, episodeId]);
 
-    // ----------------------------
     // Continue Watching (flush)
-    // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -745,9 +803,7 @@ export function AkiraPlayer({
         };
     }, [contentId, seasonId, episodeId]);
 
-    // ----------------------------
-    // ✅ Progreso de TODOS los episodios (real, usando loadProgress)
-    // ----------------------------
+    // Progreso de TODOS los episodios
     useEffect(() => {
         if (!showEpisodes) return;
 
@@ -778,9 +834,7 @@ export function AkiraPlayer({
         };
     }, [showEpisodes, episodes, contentId, seasonId]);
 
-    // ----------------------------
-    // ✅ Hidratar thumbs episodios desde Supabase (si faltan)
-    // ----------------------------
+    // Hidratar thumbs episodios desde Supabase (si faltan)
     useEffect(() => {
         if (!showEpisodes) return;
 
@@ -808,9 +862,7 @@ export function AkiraPlayer({
         };
     }, [showEpisodes, episodes]);
 
-    // ----------------------------
     // Thumbnails VTT (hover preview)
-    // ----------------------------
     useEffect(() => {
         let cancelled = false;
 
@@ -834,9 +886,7 @@ export function AkiraPlayer({
         };
     }, [thumbnailsVtt]);
 
-    // ----------------------------
     // Keyboard shortcuts
-    // ----------------------------
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
@@ -890,9 +940,7 @@ export function AkiraPlayer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ----------------------------
     // Cerrar dropdown custom
-    // ----------------------------
     useEffect(() => {
         if (!showSeasonDropdown) return;
 
@@ -918,9 +966,7 @@ export function AkiraPlayer({
         };
     }, [showSeasonDropdown]);
 
-    // ----------------------------
     // CSS var volume fill
-    // ----------------------------
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -942,9 +988,7 @@ export function AkiraPlayer({
         };
     }, []);
 
-    // ----------------------------
     // Cleanup timers
-    // ----------------------------
     useEffect(() => {
         return () => {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
@@ -952,9 +996,7 @@ export function AkiraPlayer({
         };
     }, []);
 
-    // ----------------------------
     // Derived
-    // ----------------------------
     const volumeIcon = useMemo(() => {
         if (muted) return ICONS.volume.mute;
         if (volume === 0) return ICONS.volume.vol0;
@@ -977,6 +1019,11 @@ export function AkiraPlayer({
         return findThumbnailCue(thumbnailCues, hoverTime);
     }, [hoverTime, thumbnailCues]);
 
+    // ✅ strict TS safe vars para preview
+    const hoverCueSafe = hoverCue;
+    const hoverCueXYWH = hoverCueSafe?.xywh ?? null;
+    const hoverTimeSafe = hoverTime ?? 0;
+
     const hasEpisodes = episodes.length > 0;
     const hasRecommendations = recommendations.length > 0;
 
@@ -989,9 +1036,7 @@ export function AkiraPlayer({
         });
     }, [episodes, selectedSeasonNumber]);
 
-    // ----------------------------
     // Controls actions
-    // ----------------------------
     const togglePlay = () => {
         const v = videoRef.current;
         if (!v) return;
@@ -1154,6 +1199,7 @@ export function AkiraPlayer({
             }}
             onContextMenu={(e) => e.preventDefault()}
         >
+            {/* VIDEO */}
             <video
                 ref={videoRef}
                 className="akira-video"
@@ -1175,6 +1221,7 @@ export function AkiraPlayer({
                 ))}
             </video>
 
+            {/* DOUBLE CLICK SEEK ZONES */}
             <div className="akira-gesture-layer" aria-hidden="true">
                 <button
                     type="button"
@@ -1202,28 +1249,53 @@ export function AkiraPlayer({
                 />
             </div>
 
+            {/* TOP OVERLAY */}
             <div className="akira-top-overlay">
-                <div className="akira-top-left">
+                <div
+                    className="akira-top-left"
+                    style={{ display: "grid", gap: 10, alignContent: "start" }}
+                >
                     <button
                         type="button"
                         className="akira-ghost-btn akira-back-btn"
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (onBack) onBack();
-                            else window.history.back();
+                            goBackToOpenedTitle();
                         }}
                         aria-label="Volver"
                         title="Volver"
                     >
                         ←
                     </button>
+
+                    {/* Meta debajo del back button (sin prefijo "Pelicula"/"Serie") */}
+                    <div className="akira-top-meta" aria-live="polite">
+                        <div className="akira-title">{title}</div>
+
+                        {isSeriesContext && topMetaEpisodeLine ? (
+                            <div
+                                className="akira-channel"
+                                style={{
+                                    textTransform: "none",
+                                    letterSpacing: "normal",
+                                    opacity: 0.95,
+                                    marginTop: 6,
+                                    fontWeight: 600
+                                }}
+                            >
+                                {topMetaEpisodeLine}
+                            </div>
+                        ) : null}
+                    </div>
                 </div>
             </div>
 
+            {/* CENTER FEEDBACK */}
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-feedback-pill">{feedback?.text ?? ""}</div>
             </div>
 
+            {/* Backdrop paneles */}
             {(showEpisodes || showRecommendations) && (
                 <div
                     className="akira-overlay-shell"
@@ -1236,6 +1308,7 @@ export function AkiraPlayer({
                 />
             )}
 
+            {/* Modal Episodios */}
             {showEpisodes && (
                 <div
                     className="akira-modal"
@@ -1258,6 +1331,7 @@ export function AkiraPlayer({
                                 Episodios {episodes.length ? `(${episodesForSelectedSeason.length}/${episodes.length})` : ""}
                             </div>
 
+                            {/* Dropdown custom temporada */}
                             <div className="akira-season-dd" ref={seasonDropdownRef}>
                                 <span className="akira-season-dd-label">Temporada</span>
 
@@ -1345,7 +1419,6 @@ export function AkiraPlayer({
                                 {episodesForSelectedSeason.map((ep) => {
                                     const isCurrent = !!episodeId && ep.id === episodeId;
 
-                                    // ✅ SIN cero a la izquierda
                                     const epLabel =
                                         ep.seasonNumber != null && ep.episodeNumber != null
                                             ? `T${ep.seasonNumber} · E${ep.episodeNumber}`
@@ -1459,6 +1532,7 @@ export function AkiraPlayer({
                 </div>
             )}
 
+            {/* Panel recomendado */}
             {showRecommendations && !onOpenRecommendations && (
                 <div
                     className="akira-modal akira-modal-reco"
@@ -1528,6 +1602,7 @@ export function AkiraPlayer({
                 </div>
             )}
 
+            {/* BOTTOM CONTROLS */}
             <div
                 className="akira-controls"
                 onMouseEnter={() => setControlsVisible(true)}
@@ -1565,25 +1640,25 @@ export function AkiraPlayer({
                         {showThumbPreview && hoverTime != null && (
                             <div className="akira-thumb-preview" style={{ left: hoverX }}>
                                 <div className="akira-thumb-image">
-                                    {hoverCue ? (
-                                        hoverCue.xywh ? (
+                                    {hoverCueSafe ? (
+                                        hoverCueXYWH ? (
                                             <div
                                                 className="akira-thumb-sprite"
                                                 style={{
-                                                    backgroundImage: `url(${hoverCue.url})`,
-                                                    backgroundPosition: `-${hoverCue.xywh.x}px -${hoverCue.xywh.y}px`,
-                                                    width: `${hoverCue.xywh.w}px`,
-                                                    height: `${hoverCue.xywh.h}px`
+                                                    backgroundImage: `url(${hoverCueSafe.url})`,
+                                                    backgroundPosition: `-${hoverCueXYWH.x}px -${hoverCueXYWH.y}px`,
+                                                    width: `${hoverCueXYWH.w}px`,
+                                                    height: `${hoverCueXYWH.h}px`
                                                 }}
                                             />
                                         ) : (
-                                            <img src={hoverCue.url} alt="" />
+                                            <img src={hoverCueSafe.url} alt="" />
                                         )
                                     ) : (
                                         <div className="akira-thumb-empty" />
                                     )}
                                 </div>
-                                <div className="akira-thumb-time">{fmtTime(hoverTime)}</div>
+                                <div className="akira-thumb-time">{fmtTime(hoverTimeSafe)}</div>
                             </div>
                         )}
                     </div>
