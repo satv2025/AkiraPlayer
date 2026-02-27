@@ -1422,7 +1422,6 @@ export function AkiraPlayer({
 
                             {/* Dropdown custom temporada */}
                             <div className="akira-season-dd" ref={seasonDropdownRef}>
-                                <span className="akira-season-dd-label">Temporada</span>
 
                                 <button
                                     type="button"
@@ -1468,7 +1467,6 @@ export function AkiraPlayer({
                                                     <span className="akira-season-dd-item-text">Temporada {s}</span>
                                                     {active && (
                                                         <span className="akira-season-dd-check" aria-hidden="true">
-                                                            ✓
                                                         </span>
                                                     )}
                                                 </button>
