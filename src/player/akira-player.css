@@ -447,7 +447,7 @@
 .akira-progress-row {
     align-items: center;
     display: grid;
-    gap: 14px;
+    gap: 0px;
     grid-template-columns: auto 1fr auto;
     margin-bottom: 16px;
 }
@@ -456,8 +456,8 @@
     font-size: 17px;
     font-variant-numeric: tabular-nums;
     font-weight: 500;
-    min-width: 62px;
-    opacity: .95;
+    min-width: 75px;
+    opacity: 1;
     text-align: center;
 }
 
@@ -656,6 +656,8 @@
     gap: 10px;
     justify-self: start;
     min-width: 0;
+    flex-direction: row-reverse;
+    margin-left: 1.3em;
 }
 
 .akira-center-cluster {
@@ -671,6 +673,7 @@
     display: flex;
     gap: 10px;
     justify-self: end;
+    margin-right: 0.5em;
 }
 
 .akira-text-btn {

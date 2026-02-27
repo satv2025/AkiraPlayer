@@ -250,16 +250,13 @@ function isStrictEpisodeProgressRowMatch(params: {
 
     const meta = readProgressRowMeta(row);
 
-    // Si el row trae contentId, validar
     if (meta.contentId != null && meta.contentId !== String(contentId)) return false;
 
-    // En listado / restore de episodios, exigimos match de episodeId
     if (requireEpisodeId) {
         if (meta.episodeId == null) return false;
         if (meta.episodeId !== String(episodeId)) return false;
     }
 
-    // Si ambos existen, validar season también
     if (seasonId != null && meta.seasonId != null && String(seasonId) !== String(meta.seasonId)) {
         return false;
     }
@@ -281,8 +278,6 @@ async function loadEpisodesProgressReal(params: {
         episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
             let row: any = null;
 
-            // ✅ Probamos exacto por season del ep / player, luego fallback null
-            // pero SIEMPRE validando el episodeId devuelto
             const seasonCandidates = Array.from(
                 new Set<(string | null)>([
                     ep.seasonId ?? null,
@@ -514,6 +509,10 @@ export function AkiraPlayer({
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
     const [isEpisodesModalPreparing, setIsEpisodesModalPreparing] = useState(false);
 
+    /** ✅ Boot gate: primero data, después reproducción */
+    const [isPlayerBootPreparing, setIsPlayerBootPreparing] = useState(true);
+    const [isPlayerBootReady, setIsPlayerBootReady] = useState(false);
+
     /** ✅ título/categoría reales desde movies */
     const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
     const [contentCategoryFromDb, setContentCategoryFromDb] = useState<string | null>(null);
@@ -584,11 +583,9 @@ export function AkiraPlayer({
     }, [episodes, episodeId]);
 
     const isSeriesContext = useMemo(() => {
-        // prioridad 1: categoría real desde movies (si ya cargó)
         if (contentCategoryFromDb === "series") return true;
         if (contentCategoryFromDb === "movie") return false;
 
-        // prioridad 2: URL actual
         if (typeof window !== "undefined") {
             try {
                 const sp = new URLSearchParams(window.location.search);
@@ -599,7 +596,6 @@ export function AkiraPlayer({
             }
         }
 
-        // fallback
         return Boolean(episodeId);
     }, [contentCategoryFromDb, episodeId]);
 
@@ -676,8 +672,9 @@ export function AkiraPlayer({
     }, [contentId, seasonId, episodes]);
 
     const hydrateEpisodesModalData = useCallback(
-        async (opts?: { force?: boolean }) => {
+        async (opts?: { force?: boolean; silent?: boolean }) => {
             const force = Boolean(opts?.force);
+            const silent = Boolean(opts?.silent);
 
             if (!contentId || !episodes.length) {
                 setEpisodeProgressMap({});
@@ -686,13 +683,15 @@ export function AkiraPlayer({
                 return;
             }
 
-            // ✅ Evita rehacer trabajo si ya está fresco
             if (!force && episodesModalHydratedSignatureRef.current === episodesModalDataSignature) {
                 return;
             }
 
             const seq = ++episodesModalHydrationSeqRef.current;
-            setIsEpisodesModalPreparing(true);
+
+            if (!silent) {
+                setIsEpisodesModalPreparing(true);
+            }
 
             try {
                 const [progressMap, thumbsMap] = await Promise.all([
@@ -712,10 +711,9 @@ export function AkiraPlayer({
             } catch (e) {
                 console.warn("[AkiraPlayer] Error hidratando data del modal de episodios:", e);
                 if (episodesModalHydrationSeqRef.current !== seq) return;
-                // igual marcamos firma para no entrar en loop agresivo
                 episodesModalHydratedSignatureRef.current = episodesModalDataSignature;
             } finally {
-                if (episodesModalHydrationSeqRef.current === seq) {
+                if (!silent && episodesModalHydrationSeqRef.current === seq) {
                     setIsEpisodesModalPreparing(false);
                 }
             }
@@ -752,36 +750,54 @@ export function AkiraPlayer({
         }
     };
 
-    // ✅ Hidratar título real desde movies por UUID (contentId)
+    // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
 
         (async () => {
-            if (!contentId) {
-                if (!cancelled) {
-                    setContentTitleFromDb(null);
-                    setContentCategoryFromDb(null);
+            setIsPlayerBootPreparing(true);
+            setIsPlayerBootReady(false);
+
+            // al cambiar contenido, forzamos nuevo restore del episodio
+            restoredRef.current = false;
+
+            try {
+                // 1) título/categoría real
+                if (!contentId) {
+                    if (!cancelled) {
+                        setContentTitleFromDb(null);
+                        setContentCategoryFromDb(null);
+                    }
+                } else {
+                    const { title: movieTitle, category } = await loadContentTitleFromMovies({ contentId });
+                    if (!cancelled) {
+                        setContentTitleFromDb(movieTitle);
+                        setContentCategoryFromDb(category);
+                    }
                 }
-                return;
-            }
 
-            const { title: movieTitle, category } = await loadContentTitleFromMovies({ contentId });
-
-            if (!cancelled) {
-                setContentTitleFromDb(movieTitle);
-                setContentCategoryFromDb(category);
+                // 2) hidratar data del modal ANTES de iniciar HLS/video
+                await hydrateEpisodesModalData({ force: true, silent: true });
+            } catch (e) {
+                console.warn("[AkiraPlayer] Boot inicial falló:", e);
+            } finally {
+                if (!cancelled) {
+                    setIsPlayerBootPreparing(false);
+                    setIsPlayerBootReady(true);
+                }
             }
         })();
 
         return () => {
             cancelled = true;
         };
-    }, [contentId]);
+    }, [contentId, episodesModalDataSignature, hydrateEpisodesModalData]);
 
-    // HLS setup
+    // HLS setup (gated por boot)
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !src) return;
+        if (!isPlayerBootReady) return;
 
         restoredRef.current = false;
 
@@ -898,12 +914,13 @@ export function AkiraPlayer({
                 // noop
             }
         };
-    }, [src]);
+    }, [src, isPlayerBootReady]);
 
-    // Video events
+    // Video events (gated por boot)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+        if (!isPlayerBootReady) return;
 
         const onPlay = () => {
             setPlaying(true);
@@ -931,7 +948,6 @@ export function AkiraPlayer({
         const onMeta = () => {
             setDuration(v.duration || 0);
 
-            // ✅ autoplay inicial o forzado por playlist mode
             if (autoplay || playlistNextAutoplayRef.current) {
                 v.play().catch(() => {
                     // noop
@@ -949,7 +965,6 @@ export function AkiraPlayer({
             setPlaying(false);
             setControlsVisible(true);
 
-            // ✅ Playlist mode: avanzar automáticamente al siguiente episodio
             if (
                 playlistMode &&
                 isSeriesContext &&
@@ -1004,7 +1019,7 @@ export function AkiraPlayer({
             v.removeEventListener("ended", onEnded);
             v.removeEventListener("error", onError);
         };
-    }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode]);
+    }, [autoplay, playlistMode, isSeriesContext, nextEpisodeInPlaylist, onSelectEpisode, isPlayerBootReady]);
 
     // Fullscreen state
     useEffect(() => {
@@ -1016,14 +1031,14 @@ export function AkiraPlayer({
         return () => document.removeEventListener("fullscreenchange", onFsChange);
     }, []);
 
-    // Continue Watching (load episodio actual)
+    // Continue Watching (load episodio actual) gated
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+        if (!isPlayerBootReady) return;
         if (!duration || !Number.isFinite(duration)) return;
         if (restoredRef.current) return;
 
-        // ✅ Evitar load genérico de progreso en contexto serie sin episodeId
         if (isSeriesContext && !episodeId) {
             restoredRef.current = true;
             return;
@@ -1043,7 +1058,6 @@ export function AkiraPlayer({
                 return;
             }
 
-            // ✅ Si es serie, validar que el progreso devuelto sea del episodio actual
             if (isSeriesContext && episodeId) {
                 if (
                     !isStrictEpisodeProgressRowMatch({
@@ -1084,12 +1098,13 @@ export function AkiraPlayer({
         return () => {
             cancelled = true;
         };
-    }, [duration, contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
+    }, [duration, contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
 
-    // Continue Watching (throttled save)
+    // Continue Watching (throttled save) gated
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+        if (!isPlayerBootReady) return;
 
         const onTimeUpdateSave = () => {
             const now = Date.now();
@@ -1099,7 +1114,6 @@ export function AkiraPlayer({
             const total = v.duration || 0;
             if (!Number.isFinite(total) || total <= 0) return;
 
-            // ✅ Si es contexto serie pero no hay episodeId, no guardamos (evita contaminar progreso)
             if (isSeriesContext && !episodeId) return;
 
             void saveProgress({
@@ -1113,18 +1127,18 @@ export function AkiraPlayer({
 
         v.addEventListener("timeupdate", onTimeUpdateSave);
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
 
-    // Continue Watching (flush)
+    // Continue Watching (flush) gated
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+        if (!isPlayerBootReady) return;
 
         const flush = () => {
             const total = v.duration || 0;
             if (!Number.isFinite(total) || total <= 0) return;
 
-            // ✅ Si es contexto serie pero no hay episodeId, no guardamos
             if (isSeriesContext && !episodeId) return;
 
             void saveProgress({
@@ -1149,9 +1163,9 @@ export function AkiraPlayer({
             window.removeEventListener("beforeunload", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
 
-    // ✅ Fallback: si el modal ya está abierto y cambia la lista/temporada desde props, rehidratar
+    // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
         void hydrateEpisodesModalData();
@@ -1293,22 +1307,14 @@ export function AkiraPlayer({
 
     // Derived
     const volumeIcon = useMemo(() => {
-        // mute explícito
         if (muted) return ICONS.volume.mute;
 
         const pct = Math.round((volume || 0) * 100);
 
-        // 0% -> mute
-        if (pct <= 0) return ICONS.volume.mute;
-
-        // 1% a 30% -> vol0
-        if (pct <= 30) return ICONS.volume.vol0;
-
-        // 31% a 74% -> vol1
-        if (pct < 75) return ICONS.volume.vol1;
-
-        // 75% a 100% -> vol2
-        return ICONS.volume.vol2;
+        if (pct <= 0) return ICONS.volume.mute;  // 0%
+        if (pct <= 30) return ICONS.volume.vol0; // 1-30%
+        if (pct < 75) return ICONS.volume.vol1;  // 31-74%
+        return ICONS.volume.vol2;                // 75-100%
     }, [ICONS, muted, volume]);
 
     const progressPct = useMemo(() => {
@@ -1326,7 +1332,6 @@ export function AkiraPlayer({
         return findThumbnailCue(thumbnailCues, hoverTime);
     }, [hoverTime, thumbnailCues]);
 
-    // ✅ strict TS safe vars para preview
     const hoverCueSafe = hoverCue;
     const hoverCueXYWH = hoverCueSafe?.xywh ?? null;
     const hoverTimeSafe = hoverTime ?? 0;
@@ -1411,8 +1416,6 @@ export function AkiraPlayer({
         const safeValue = clamp(value, 0, 1);
 
         v.volume = safeValue;
-
-        // ✅ Consistencia: slider en 0 => mute real
         v.muted = safeValue <= 0;
 
         flashFeedback(`Vol ${Math.round(safeValue * 100)}%`);
@@ -1456,7 +1459,7 @@ export function AkiraPlayer({
         setSelectedSeasonNumber(nextSeason);
         setShowSeasonDropdown(false);
 
-        // ✅ Primero hidrata data del modal (progreso + thumbs), después abre
+        // Ya debería venir precargado por boot; esto solo revalida si cambió algo
         try {
             await hydrateEpisodesModalData();
         } catch {
@@ -1539,6 +1542,13 @@ export function AkiraPlayer({
                 ))}
             </video>
 
+            {/* BOOT OVERLAY: prepara data antes de arrancar el repro */}
+            {isPlayerBootPreparing && (
+                <div className="akira-overlay-shell" aria-hidden="true">
+                    <div className="akira-empty-state">Preparando reproducción...</div>
+                </div>
+            )}
+
             {/* DOUBLE CLICK SEEK ZONES */}
             <div className="akira-gesture-layer" aria-hidden="true">
                 <button
@@ -1586,7 +1596,6 @@ export function AkiraPlayer({
                         ←
                     </button>
 
-                    {/* Meta debajo del back button (sin prefijo "Pelicula"/"Serie") */}
                     <div className="akira-top-meta" aria-live="polite">
                         <div className="akira-title">{displayContentTitle}</div>
 
@@ -1649,7 +1658,6 @@ export function AkiraPlayer({
                                 {displayContentTitle} · Listado de episodios
                             </div>
 
-                            {/* Dropdown custom temporada */}
                             <div className="akira-season-dd" ref={seasonDropdownRef}>
                                 <button
                                     type="button"
@@ -2000,7 +2008,7 @@ export function AkiraPlayer({
                             }}
                             title="Episodios"
                             aria-label="Episodios"
-                            disabled={!hasEpisodes || isEpisodesModalPreparing}
+                            disabled={!hasEpisodes || isEpisodesModalPreparing || isPlayerBootPreparing}
                         >
                             {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
                             {hasEpisodes ? (
