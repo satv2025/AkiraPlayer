@@ -750,6 +750,58 @@ export function AkiraPlayer({
         }
     };
 
+    // ✅ Evento custom para handshake con watch.html/watch.js (robusto)
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        if (isPlayerBootPreparing) {
+            const detail = {
+                contentId: contentId ?? null,
+                episodeId: episodeId ?? null,
+                src: src ?? null,
+                at: Date.now()
+            };
+
+            try {
+                (window as any).__SATV_AKIRA_LAST_PREPARING_EVENT__ = detail;
+            } catch {
+                // noop
+            }
+
+            try {
+                window.dispatchEvent(
+                    new CustomEvent("akira:playback-preparing", { detail })
+                );
+            } catch {
+                // noop
+            }
+            return;
+        }
+
+        if (isPlayerBootReady) {
+            const detail = {
+                contentId: contentId ?? null,
+                episodeId: episodeId ?? null,
+                src: src ?? null,
+                at: Date.now()
+            };
+
+            try {
+                (window as any).__SATV_AKIRA_LAST_READY_EVENT__ = detail;
+            } catch {
+                // noop
+            }
+
+            try {
+                window.dispatchEvent(
+                    new CustomEvent("akira:playback-ready", { detail })
+                );
+            } catch {
+                // noop
+            }
+        }
+    }, [isPlayerBootPreparing, isPlayerBootReady, contentId, episodeId, src]);
+
     // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
