@@ -2743,22 +2743,24 @@ export function AkiraPlayer({
                             ) : null}
                         </button>
 
-                        <button
-                            type="button"
-                            className="akira-text-btn"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                void openEpisodesPanel();
-                            }}
-                            title="Episodios"
-                            aria-label="Episodios"
-                            disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
-                        >
-                            {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
-                            {hasEpisodes ? (
-                                <span className="akira-text-btn-count">{episodes.length}</span>
-                            ) : null}
-                        </button>
+{isSeriesContext && (
+    <button
+        type="button"
+        className="akira-text-btn"
+        onClick={(e) => {
+            e.stopPropagation();
+            void openEpisodesPanel();
+        }}
+        title="Episodios"
+        aria-label="Episodios"
+        disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
+    >
+        {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
+        {hasEpisodes ? (
+            <span className="akira-text-btn-count">{episodes.length}</span>
+        ) : null}
+    </button>
+)}
                     </div>
 
                     <div className="akira-center-cluster">
