@@ -215,10 +215,10 @@
     display: grid;
     grid-template-rows: auto 1fr;
     overflow: hidden;
-    background: #0b0c10;
-    border: 1px solid #0b0c1014;
+    background: #07090d;
+    border: 1px solid #07090d14;
     border-radius: 0.25em;
-    box-shadow: 0 12px 34px #0b0c1061;
+    box-shadow: 0 12px 34px #07090d61;
 }
 
 .akira-modal-reco {
@@ -232,7 +232,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px;
-    border-bottom: 1px solid #0b0c1014;
+    border-bottom: 1px solid #07090d14;
 }
 
 .akira-modal-title {
@@ -328,7 +328,7 @@
 .akira-episode-thumb {
     width: 100%;
     aspect-ratio: 16 / 9;
-    background: #0b0c10;
+    background: #07090d;
     border-radius: 0.25em;
     position: relative;
     overflow: hidden;
@@ -465,7 +465,7 @@
     position: relative;
     width: 100%;
     aspect-ratio: 2 / 3;
-    background: #0b0c10;
+    background: #07090d;
     border-radius: 0.25em;
     overflow: hidden;
 }
@@ -708,7 +708,7 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    background: #0b0c1000;
+    background: #07090d00;
     border-radius: 0;
     box-shadow: none;
 }
@@ -738,7 +738,7 @@
     width: 100%;
     margin-top: -0.6em;
     padding: 10px 10px;
-    background: #0b0c10;
+    background: #07090d;
     color: #fff;
     text-align: center;
     font-size: 18px;
