@@ -51,11 +51,6 @@ type EpisodeItem = {
 
 type Props = {
     src: string;
-    // Live mode (compat con watch.js live patch)
-    isLiveMode?: boolean;
-    liveStartsAt?: string | null;
-    streamType?: "live" | "on-demand";
-    disableResumeForLive?: boolean;
     poster?: string;
     autoplay?: boolean;
     title?: string; // puede venir mal (ej. "Episodio 2"), se hidrata desde movies por contentId
@@ -150,6 +145,11 @@ function fmtTime(seconds: number): string {
         return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
     }
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function isMpdUrl(input: string | null | undefined): boolean {
+    const value = String(input || "").trim();
+    return /\.mpd(?:$|[?#])/i.test(value);
 }
 
 function normalizeMaybeRelativeUrl(input: string): string {
@@ -319,11 +319,7 @@ async function loadEpisodesProgressReal(params: {
             let row: any = null;
 
             const seasonCandidates = Array.from(
-                new Set<(string | null)>([
-                    ep.seasonId ?? null,
-                    seasonId ?? null,
-                    null
-                ])
+                new Set<(string | null)>([ep.seasonId ?? null, seasonId ?? null, null])
             );
 
             for (const sId of seasonCandidates) {
@@ -682,6 +678,11 @@ export function AkiraPlayer({
 
         return "AkiraPlayer";
     }, [contentTitleFromDb, title]);
+
+    /** ✅ Live mode detectado por URL DASH (.mpd) */
+    const isLiveMode = useMemo(() => {
+        return isMpdUrl(src);
+    }, [src]);
 
     const topMetaEpisodeLine = useMemo(() => {
         if (!isSeriesContext) return "";
@@ -1752,6 +1753,11 @@ export function AkiraPlayer({
         if (!duration || !Number.isFinite(duration)) return;
         if (restoredRef.current) return;
 
+        if (isLiveMode) {
+            restoredRef.current = true;
+            return;
+        }
+
         if (isSeriesContext && !episodeId) {
             restoredRef.current = true;
             return;
@@ -1810,13 +1816,22 @@ export function AkiraPlayer({
         return () => {
             cancelled = true;
         };
-    }, [duration, contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
+    }, [
+        duration,
+        contentId,
+        effectiveSeasonIdForCurrentEpisode,
+        episodeId,
+        isSeriesContext,
+        isPlayerBootReady,
+        isLiveMode
+    ]);
 
     // Continue Watching (throttled save)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
         if (!isPlayerBootReady) return;
+        if (isLiveMode) return;
 
         const onTimeUpdateSave = () => {
             const now = Date.now();
@@ -1839,13 +1854,14 @@ export function AkiraPlayer({
 
         v.addEventListener("timeupdate", onTimeUpdateSave);
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
     // Continue Watching (flush)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
         if (!isPlayerBootReady) return;
+        if (isLiveMode) return;
 
         const flush = () => {
             const total = v.duration || 0;
@@ -1875,7 +1891,7 @@ export function AkiraPlayer({
             window.removeEventListener("beforeunload", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
     // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
@@ -2078,7 +2094,9 @@ export function AkiraPlayer({
         showControlsTemporarily();
 
         if (v.paused) {
-            v.play().catch(() => { /* noop */ });
+            v.play().catch(() => {
+                /* noop */
+            });
             // ✅ Si arranca a reproducir: mostrar ícono de PAUSE
             flashFeedbackIcon(ICONS.pause, "Pausa");
         } else {
@@ -2089,6 +2107,8 @@ export function AkiraPlayer({
     };
 
     const seekBy = (delta: number) => {
+        if (isLiveMode) return;
+
         const v = videoRef.current;
         if (!v) return;
 
@@ -2099,6 +2119,8 @@ export function AkiraPlayer({
     };
 
     const onSeekBarChange = (value: number) => {
+        if (isLiveMode) return;
+
         const v = videoRef.current;
         if (!v) return;
         v.currentTime = value;
@@ -2107,6 +2129,8 @@ export function AkiraPlayer({
     };
 
     const onProgressMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (isLiveMode) return;
+
         const el = progressWrapRef.current;
         if (!el || !duration) return;
 
@@ -2246,7 +2270,7 @@ export function AkiraPlayer({
             {/* VIDEO */}
             <video
                 ref={videoRef}
-                className="akira-video"
+                className={`akira-video ${isLiveMode ? "is-live" : ""}`}
                 poster={poster}
                 playsInline
                 controls={false}
@@ -2463,13 +2487,9 @@ export function AkiraPlayer({
 
                     <div className="akira-modal-body">
                         {isEpisodesModalPreparing ? (
-                            <div className="akira-empty-state">
-                                Cargando episodios...
-                            </div>
+                            <div className="akira-empty-state">Cargando episodios...</div>
                         ) : episodes.length === 0 ? (
-                            <div className="akira-empty-state">
-                                No hay episodios cargados todavía.
-                            </div>
+                            <div className="akira-empty-state">No hay episodios cargados todavía.</div>
                         ) : episodesForSelectedSeason.length === 0 ? (
                             <div className="akira-empty-state">
                                 No hay episodios cargados para la temporada {selectedSeasonNumber}.
@@ -2552,9 +2572,7 @@ export function AkiraPlayer({
                                                 </div>
 
                                                 {ep.synopsis && (
-                                                    <div className="akira-episode-synopsis">
-                                                        {ep.synopsis}
-                                                    </div>
+                                                    <div className="akira-episode-synopsis">{ep.synopsis}</div>
                                                 )}
 
                                                 <div
@@ -2659,8 +2677,8 @@ export function AkiraPlayer({
                     if (playing) showControlsTemporarily();
                 }}
             >
-                <div className="akira-progress-row">
-                    <span className="akira-time">{fmtTime(currentTime)}</span>
+                <div className={`akira-progress-row ${isLiveMode ? "is-live" : ""}`}>
+                    {!isLiveMode && <span className="akira-time">{fmtTime(currentTime)}</span>}
 
                     <div
                         className="akira-progress-wrap"
@@ -2683,10 +2701,10 @@ export function AkiraPlayer({
                             value={Math.min(currentTime, duration || 0)}
                             onChange={(e) => onSeekBarChange(Number(e.target.value))}
                             onInput={(e) => onSeekBarChange(Number((e.target as HTMLInputElement).value))}
-                            aria-label="Progreso"
+                            aria-label={isLiveMode ? "Timeline en vivo" : "Progreso"}
                         />
 
-                        {showThumbPreview && hoverTime != null && (
+                        {!isLiveMode && showThumbPreview && hoverTime != null && (
                             <div className="akira-thumb-preview" style={{ left: hoverX }}>
                                 <div className="akira-thumb-image">
                                     {hoverCueSafe ? (
@@ -2712,7 +2730,9 @@ export function AkiraPlayer({
                         )}
                     </div>
 
-                    <span className="akira-time">{fmtTime(duration)}</span>
+                    <span className={`akira-time ${isLiveMode ? "akira-live-label" : ""}`}>
+                        {isLiveMode ? "EN VIVO" : fmtTime(duration)}
+                    </span>
                 </div>
 
                 {/* ✅ Overlay global prev/next episode (fuera de center cluster) */}
@@ -2748,24 +2768,24 @@ export function AkiraPlayer({
                             ) : null}
                         </button>
 
-{isSeriesContext && (
-    <button
-        type="button"
-        className="akira-text-btn"
-        onClick={(e) => {
-            e.stopPropagation();
-            void openEpisodesPanel();
-        }}
-        title="Episodios"
-        aria-label="Episodios"
-        disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
-    >
-        {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
-        {hasEpisodes ? (
-            <span className="akira-text-btn-count">{episodes.length}</span>
-        ) : null}
-    </button>
-)}
+                        {isSeriesContext && (
+                            <button
+                                type="button"
+                                className="akira-text-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    void openEpisodesPanel();
+                                }}
+                                title="Episodios"
+                                aria-label="Episodios"
+                                disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
+                            >
+                                {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
+                                {hasEpisodes ? (
+                                    <span className="akira-text-btn-count">{episodes.length}</span>
+                                ) : null}
+                            </button>
+                        )}
                     </div>
 
                     <div className="akira-center-cluster">

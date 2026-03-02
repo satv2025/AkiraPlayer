@@ -80,6 +80,11 @@
     object-fit: cover;
 }
 
+/* ✅ LIVE (.mpd): mostrar video completo, sin recorte */
+.akira-video.is-live {
+    object-fit: contain !important;
+}
+
 /* =========================================================
    GESTURE LAYER
    ========================================================= */
@@ -120,12 +125,10 @@
     justify-content: flex-start;
     padding: 22px 28px 30px;
     pointer-events: none;
-    background: linear-gradient(
-        180deg,
-        rgba(0, 0, 0, 0.86),
-        rgba(0, 0, 0, 0.38),
-        transparent
-    );
+    background: linear-gradient(180deg,
+            rgba(0, 0, 0, 0.86),
+            rgba(0, 0, 0, 0.38),
+            transparent);
     transition: opacity 0.2s ease;
 }
 
@@ -316,11 +319,9 @@
 }
 
 .akira-episode-card.current {
-    background: linear-gradient(
-        180deg,
-        rgba(37, 99, 235, 0.12),
-        hsla(0, 0%, 100%, 0.02)
-    );
+    background: linear-gradient(180deg,
+            rgba(37, 99, 235, 0.12),
+            hsla(0, 0%, 100%, 0.02));
     border-color: rgba(37, 99, 235, 0.65);
     box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
 }
@@ -523,12 +524,10 @@
     bottom: 0;
     z-index: 12;
     padding: 14px 20px 18px;
-    background: linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.9),
-        rgba(0, 0, 0, 0.5),
-        transparent
-    );
+    background: linear-gradient(0deg,
+            rgba(0, 0, 0, 0.9),
+            rgba(0, 0, 0, 0.5),
+            transparent);
     transition: opacity 0.2s ease, transform 0.2s ease;
     overflow: visible !important;
 }
@@ -680,6 +679,51 @@
 .akira-progress-wrap:hover .akira-progress::-moz-range-thumb {
     width: 22px;
     height: 22px;
+}
+
+/* =========================================================
+   LIVE MODE (.mpd) - UI EN VIVO
+   ========================================================= */
+
+.akira-progress-row.is-live {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+}
+
+.akira-progress-row.is-live .akira-progress-wrap {
+    min-width: 0;
+}
+
+.akira-progress-row.is-live .akira-progress {
+    cursor: default;
+}
+
+.akira-live-label {
+    min-width: auto !important;
+    width: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    text-align: right;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #ff4d4f;
+    opacity: 1;
+    white-space: nowrap;
+    font-variant-numeric: normal;
+}
+
+.akira-live-label::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #ff3b30;
+    box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.14);
+    flex: 0 0 auto;
 }
 
 /* =========================================================
@@ -912,8 +956,7 @@
     object-fit: contain;
     pointer-events: none;
     opacity: 0.98;
-    filter: brightness(0) saturate(100%) invert(97%) sepia(0) saturate(7488%)
-        hue-rotate(184deg) brightness(105%) contrast(105%);
+    filter: brightness(0) saturate(100%) invert(97%) sepia(0) saturate(7488%) hue-rotate(184deg) brightness(105%) contrast(105%);
 }
 
 img.playSVG {
@@ -963,14 +1006,14 @@ img.playSVG {
     height: auto;
 }
 
-.akira-volume:has(.akira-volume-pop.show) > .akira-icon-btn.lg,
-.akira-volume > .akira-icon-btn:hover {
+.akira-volume:has(.akira-volume-pop.show)>.akira-icon-btn.lg,
+.akira-volume>.akira-icon-btn:hover {
     background: hsla(0, 0%, 100%, 0.1);
     border-radius: 0.25em;
     transform: scale(1.2);
 }
 
-.akira-volume:has(.akira-volume-pop.show) > button {
+.akira-volume:has(.akira-volume-pop.show)>button {
     background: rgba(255, 255, 255, 0);
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
@@ -1202,11 +1245,9 @@ img.playSVG {
 }
 
 .akira-season-dd-item.active {
-    background: linear-gradient(
-        180deg,
-        rgba(37, 99, 235, 0.12),
-        hsla(0, 0%, 100%, 0.02)
-    );
+    background: linear-gradient(180deg,
+            rgba(37, 99, 235, 0.12),
+            hsla(0, 0%, 100%, 0.02));
     border-color: rgba(37, 99, 235, 0.35);
 }
 
@@ -1588,6 +1629,23 @@ img.playSVG {
     .akira-time {
         min-width: 58px;
         font-size: 12px;
+    }
+
+    /* ✅ LIVE label responsive */
+    .akira-progress-row.is-live {
+        gap: 8px;
+    }
+
+    .akira-live-label {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        gap: 6px;
+    }
+
+    .akira-live-label::before {
+        width: 7px;
+        height: 7px;
+        box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.14);
     }
 
     /* PREVIEW THUMB COMO ANTES */
