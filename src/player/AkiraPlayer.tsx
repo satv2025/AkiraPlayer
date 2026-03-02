@@ -51,6 +51,11 @@ type EpisodeItem = {
 
 type Props = {
     src: string;
+    // Live mode (compat con watch.js live patch)
+    isLiveMode?: boolean;
+    liveStartsAt?: string | null;
+    streamType?: "live" | "on-demand";
+    disableResumeForLive?: boolean;
     poster?: string;
     autoplay?: boolean;
     title?: string; // puede venir mal (ej. "Episodio 2"), se hidrata desde movies por contentId

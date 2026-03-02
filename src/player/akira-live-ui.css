@@ -1,0 +1,30 @@
+/* reproductor/akira-live-ui.css */
+/* Estilos opcionales si querés mostrar badge live en tu TSX */
+.akira-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, .45);
+  background: rgba(239, 68, 68, .12);
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 700;
+}
+.akira-live-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, .18);
+}
+.akira-live-countdown {
+  color: #93c5fd;
+  font-weight: 700;
+}
+body.is-live-playing [data-akira-seek],
+body.is-live-playing media-time-slider {
+  display: none !important; /* opcional si no querés seek en vivo */
+}

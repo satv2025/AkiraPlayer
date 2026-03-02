@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { AkiraPlayer } from "./player/AkiraPlayer";
 import "./player/akira-player.css";
+import "./player/akira-live-ui.css";
 
 export type SubtitleTrackInput = {
   src: string;
@@ -13,6 +14,12 @@ export type SubtitleTrackInput = {
 export type AkiraPlayerOptions = {
   // Video source (HLS m3u8)
   src: string;
+
+  // Live mode (opcionales, enviados por watch.js)
+  isLiveMode?: boolean;
+  liveStartsAt?: string | null;
+  streamType?: "live" | "on-demand";
+  disableResumeForLive?: boolean;
 
   // UI
   poster?: string;
