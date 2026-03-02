@@ -1,5 +1,6 @@
 // AkiraPlayer.tsx
 import Hls from "hls.js";
+import * as dashjs from "dashjs";
 import React, {
     useCallback,
     useEffect,
@@ -152,6 +153,11 @@ function isMpdUrl(input: string | null | undefined): boolean {
     return /\.mpd(?:$|[?#])/i.test(value);
 }
 
+function isM3u8Url(input: string | null | undefined): boolean {
+    const value = String(input || "").trim();
+    return /\.m3u8(?:$|[?#])/i.test(value);
+}
+
 function normalizeMaybeRelativeUrl(input: string): string {
     const value = String(input || "").trim();
     if (!value) return value;
@@ -246,26 +252,26 @@ function readProgressRowMeta(row: ProgressRowLike | null | undefined) {
         row.content_id != null
             ? String(row.content_id)
             : row.contentId != null
-              ? String(row.contentId)
-              : (row as any).movie_id != null
-                ? String((row as any).movie_id)
-                : null;
+                ? String(row.contentId)
+                : (row as any).movie_id != null
+                    ? String((row as any).movie_id)
+                    : null;
 
     const seasonId =
         row.season_id != null
             ? String(row.season_id)
             : row.seasonId != null
-              ? String(row.seasonId)
-              : null;
+                ? String(row.seasonId)
+                : null;
 
     const episodeId =
         row.episode_id != null
             ? String(row.episode_id)
             : row.episodeId != null
-              ? String(row.episodeId)
-              : (row as any).episode_id_db != null
-                ? String((row as any).episode_id_db)
-                : null;
+                ? String(row.episodeId)
+                : (row as any).episode_id_db != null
+                    ? String((row as any).episode_id_db)
+                    : null;
 
     return { contentId, seasonId, episodeId };
 }
@@ -516,6 +522,8 @@ export function AkiraPlayer({
     const seasonDropdownRef = useRef<HTMLDivElement | null>(null);
 
     const hlsRef = useRef<Hls | null>(null);
+    const dashRef = useRef<any | null>(null);
+
     const restoredRef = useRef(false);
     const lastSavedAtRef = useRef(0);
     const controlsHideTimerRef = useRef<number | null>(null);
@@ -696,9 +704,6 @@ export function AkiraPlayer({
         return "";
     }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
 
-    /**
-     * ✅ Playlist helpers ANTES del useEffect de video
-     */
     const orderedEpisodes = useMemo(() => {
         return [...episodes].sort((a, b) => {
             const sa = a.seasonNumber ?? 1;
@@ -728,12 +733,10 @@ export function AkiraPlayer({
         return orderedEpisodes[currentEpisodeIndexInPlaylist + 1] ?? null;
     }, [orderedEpisodes, currentEpisodeIndexInPlaylist]);
 
-    /** ✅ Season efectivo para progresos del episodio actual */
     const effectiveSeasonIdForCurrentEpisode = useMemo(() => {
         return currentEpisodeData?.seasonId ?? seasonId ?? null;
     }, [currentEpisodeData, seasonId]);
 
-    /** ✅ Firma para saber si ya hidratamos el modal con este set de episodios */
     const episodesModalDataSignature = useMemo(() => {
         const compact = episodes.map((ep) => [
             String(ep.id),
@@ -750,7 +753,6 @@ export function AkiraPlayer({
         });
     }, [contentId, seasonId, episodes]);
 
-    /** ✅ Firma de handshake alineada con watch.html */
     const playbackHandshakeKey = useMemo(() => {
         return JSON.stringify({
             contentId: String(contentId || ""),
@@ -901,12 +903,10 @@ export function AkiraPlayer({
 
         clearInstantUnmuteTimers();
 
-        // "milésima 1"
         instantUnmuteTimerRef.current = window.setTimeout(() => {
             apply();
         }, 1);
 
-        // respaldo: siguiente frame
         instantUnmuteRafRef.current = window.requestAnimationFrame(() => {
             apply();
         });
@@ -951,8 +951,6 @@ export function AkiraPlayer({
         direction: "prev" | "next"
     ) => {
         if (!ep) return;
-
-        // Si ya hay navegación en curso, no pisar overlay
         if (episodeNavCommitTimerRef.current) return;
 
         const thumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
@@ -966,7 +964,6 @@ export function AkiraPlayer({
     };
 
     const hideEpisodeStepHover = (direction: "prev" | "next") => {
-        // Si hay navegación en curso, dejamos overlay hasta cambiar episodio
         if (episodeNavCommitTimerRef.current) return;
 
         setEpisodeNavOverlay((prev) => {
@@ -1020,7 +1017,6 @@ export function AkiraPlayer({
         navigateEpisodeWithOverlay(nextEpisodeInPlaylist, "next");
     };
 
-    // ✅ Reset handshake cuando cambia reproducción
     useEffect(() => {
         setIsMediaHandshakeReady(false);
         setIsPreparingOverlayGoneCommitted(false);
@@ -1056,7 +1052,6 @@ export function AkiraPlayer({
         setEpisodeNavOverlay(null);
     }, [playbackHandshakeKey, clearInstantUnmuteTimers]);
 
-    // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1138,7 +1133,6 @@ export function AkiraPlayer({
         };
     }, [isPlayerBootReady, src, contentId, episodeId, playbackHandshakeKey]);
 
-    // ✅ Confirmar en DOM que el overlay "Preparando reproducción..." realmente desapareció (commit + RAF)
     useLayoutEffect(() => {
         let cancelled = false;
         let rafId: number | null = null;
@@ -1167,7 +1161,6 @@ export function AkiraPlayer({
         };
     }, [isPreparingUiVisible, isPreparingOverlayVisibleInDom, playbackHandshakeKey]);
 
-    // ✅ Evento custom para handshake con watch.html/watch.js
     useEffect(() => {
         if (typeof window === "undefined") return;
 
@@ -1192,11 +1185,11 @@ export function AkiraPlayer({
                 overlayGoneCommitted: isPreparingOverlayGoneCommitted,
                 video: v
                     ? {
-                          currentSrc: v.currentSrc || null,
-                          srcAttr: v.getAttribute("src"),
-                          readyState: v.readyState,
-                          networkState: v.networkState
-                      }
+                        currentSrc: v.currentSrc || null,
+                        srcAttr: v.getAttribute("src"),
+                        readyState: v.readyState,
+                        networkState: v.networkState
+                    }
                     : null
             };
         };
@@ -1310,7 +1303,6 @@ export function AkiraPlayer({
         isPreparingOverlayVisibleInDom
     ]);
 
-    // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
 
@@ -1350,7 +1342,7 @@ export function AkiraPlayer({
         };
     }, [contentId, episodesModalDataSignature, hydrateEpisodesModalData]);
 
-    // HLS setup (gated por boot)
+    // ✅ MEDIA setup: DASH (.mpd) + HLS (.m3u8) + fallback directo
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !src) return;
@@ -1358,13 +1350,23 @@ export function AkiraPlayer({
 
         restoredRef.current = false;
 
-        if (hlsRef.current) {
-            try {
+        // cleanup previo
+        try {
+            if (hlsRef.current) {
                 hlsRef.current.destroy();
-            } catch {
-                // noop
+                hlsRef.current = null;
             }
-            hlsRef.current = null;
+        } catch {
+            // noop
+        }
+
+        try {
+            if (dashRef.current) {
+                dashRef.current.reset?.();
+                dashRef.current = null;
+            }
+        } catch {
+            // noop
         }
 
         try {
@@ -1387,15 +1389,59 @@ export function AkiraPlayer({
             typeof Hls.isSupported === "function" &&
             Hls.isSupported();
 
-        console.log("[AkiraPlayer][HLS setup]", {
+        const isDashSource = isMpdUrl(src);
+        const isHlsSource = isM3u8Url(src);
+
+        console.log("[AkiraPlayer][MEDIA setup]", {
             src,
+            isDashSource,
+            isHlsSource,
             nativeHlsCanPlay,
             hlsJsSupported,
-            safariLikeNative: isSafariLikeForNativeHls(),
-            hlsType: typeof Hls
+            safariLikeNative: isSafariLikeForNativeHls()
         });
 
-        if (hlsJsSupported) {
+        if (isDashSource) {
+            try {
+                const mp = (dashjs as any)?.MediaPlayer;
+                const events = (dashjs as any)?.MediaPlayer?.events;
+
+                if (!mp) {
+                    console.warn("[AkiraPlayer][DASH] dashjs no disponible");
+                } else {
+                    const player = mp().create();
+                    dashRef.current = player;
+
+                    try {
+                        player.updateSettings?.({
+                            streaming: {
+                                lowLatencyEnabled: true
+                            }
+                        });
+                    } catch {
+                        // noop
+                    }
+
+                    if (events) {
+                        player.on(events.STREAM_INITIALIZED, () => {
+                            console.log("[AkiraPlayer][DASH] STREAM_INITIALIZED");
+                        });
+
+                        player.on(events.ERROR, (e: any) => {
+                            console.error("[AkiraPlayer][DASH] ERROR", {
+                                error: e?.error ?? null,
+                                event: e
+                            });
+                        });
+                    }
+
+                    player.initialize(video, src, false);
+                    console.log("[AkiraPlayer][DASH] initialize", { src });
+                }
+            } catch (e) {
+                console.error("[AkiraPlayer][DASH] fallo inicializando dashjs", e);
+            }
+        } else if (isHlsSource && hlsJsSupported) {
             const hls = new Hls({
                 enableWorker: true,
                 lowLatencyMode: true
@@ -1425,10 +1471,10 @@ export function AkiraPlayer({
                     fatal: data?.fatal,
                     response: data?.response
                         ? {
-                              code: data.response.code,
-                              text: data.response.text,
-                              url: data.response.url
-                          }
+                            code: data.response.code,
+                            text: data.response.text,
+                            url: data.response.url
+                        }
                         : null,
                     reason: (data as any)?.reason || null
                 });
@@ -1436,16 +1482,15 @@ export function AkiraPlayer({
 
             hls.loadSource(src);
             hls.attachMedia(video);
-        } else if (nativeHlsCanPlay && isSafariLikeForNativeHls()) {
+        } else if (isHlsSource && nativeHlsCanPlay && isSafariLikeForNativeHls()) {
             console.log("[AkiraPlayer][HLS] usando HLS nativo (Safari/iOS)");
             video.src = src;
             video.load();
         } else {
-            console.warn("[AkiraPlayer] HLS no soportado en este navegador", {
-                nativeHlsCanPlay,
-                hlsJsSupported,
-                safariLikeNative: isSafariLikeForNativeHls()
-            });
+            // fallback directo (mp4/webm/etc o URL no clasificada)
+            console.log("[AkiraPlayer][MEDIA] fallback directo <video src>");
+            video.src = src;
+            video.load();
         }
 
         return () => {
@@ -1453,6 +1498,15 @@ export function AkiraPlayer({
                 if (hlsRef.current) {
                     hlsRef.current.destroy();
                     hlsRef.current = null;
+                }
+            } catch {
+                // noop
+            }
+
+            try {
+                if (dashRef.current) {
+                    dashRef.current.reset?.();
+                    dashRef.current = null;
                 }
             } catch {
                 // noop
@@ -1473,7 +1527,6 @@ export function AkiraPlayer({
         };
     }, [src, isPlayerBootReady]);
 
-    // Video events (gated por boot)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1483,7 +1536,6 @@ export function AkiraPlayer({
             setPlaying(true);
             showControlsTemporarily();
 
-            // Si venimos de autoplay fallback muteado, intentar desmutear instantáneamente
             if (pendingInstantUnmuteRef.current) {
                 forceInstantUnmute("onPlay");
                 pendingInstantUnmuteRef.current = false;
@@ -1539,7 +1591,6 @@ export function AkiraPlayer({
                         } catch (e2) {
                             pendingInstantUnmuteRef.current = false;
                             console.warn("[AkiraPlayer][autoplay] onMeta mute bootstrap falló", e2);
-                            // dejamos que post-handshake siga intentando
                         }
                     }
                 })();
@@ -1591,7 +1642,6 @@ export function AkiraPlayer({
         v.volume = 1;
 
         if (autoplay) {
-            // intento temprano con audio; si falla, lo resolverá onMeta/post-handshake
             v.defaultMuted = false;
             v.muted = false;
             v.removeAttribute("muted");
@@ -1624,7 +1674,6 @@ export function AkiraPlayer({
         forceInstantUnmute
     ]);
 
-    // ✅ Autoplay reforzado POST-handshake (audio -> muted bootstrap -> instant unmute)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1645,7 +1694,6 @@ export function AkiraPlayer({
             if (cancelled) return;
             if (!v.paused && !v.ended) return;
 
-            // 1) Intento directo con audio
             try {
                 v.defaultMuted = false;
                 v.muted = false;
@@ -1673,7 +1721,6 @@ export function AkiraPlayer({
                 });
             }
 
-            // 2) Fallback: arrancar muteado
             try {
                 v.defaultMuted = true;
                 v.muted = true;
@@ -1735,7 +1782,6 @@ export function AkiraPlayer({
         forceInstantUnmute
     ]);
 
-    // Fullscreen state
     useEffect(() => {
         const onFsChange = () => {
             setIsFullscreen(Boolean(document.fullscreenElement));
@@ -1893,13 +1939,11 @@ export function AkiraPlayer({
         };
     }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
-    // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
         void hydrateEpisodesModalData();
     }, [showEpisodes, hydrateEpisodesModalData]);
 
-    // Thumbnails VTT (hover preview)
     useEffect(() => {
         let cancelled = false;
 
@@ -1923,7 +1967,6 @@ export function AkiraPlayer({
         };
     }, [thumbnailsVtt]);
 
-    // Keyboard shortcuts
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
@@ -1977,7 +2020,6 @@ export function AkiraPlayer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Cerrar dropdown custom
     useEffect(() => {
         if (!showSeasonDropdown) return;
 
@@ -2003,7 +2045,6 @@ export function AkiraPlayer({
         };
     }, [showSeasonDropdown]);
 
-    // CSS var volume fill
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -2025,7 +2066,6 @@ export function AkiraPlayer({
         };
     }, []);
 
-    // Cleanup timers
     useEffect(() => {
         return () => {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
@@ -2040,10 +2080,27 @@ export function AkiraPlayer({
 
             if (episodeNavOverlayHideTimerRef.current) window.clearTimeout(episodeNavOverlayHideTimerRef.current);
             if (episodeNavCommitTimerRef.current) window.clearTimeout(episodeNavCommitTimerRef.current);
+
+            try {
+                if (hlsRef.current) {
+                    hlsRef.current.destroy();
+                    hlsRef.current = null;
+                }
+            } catch {
+                // noop
+            }
+
+            try {
+                if (dashRef.current) {
+                    dashRef.current.reset?.();
+                    dashRef.current = null;
+                }
+            } catch {
+                // noop
+            }
         };
     }, [clearInstantUnmuteTimers]);
 
-    // Derived
     const volumeIcon = useMemo(() => {
         if (muted) return ICONS.volume.mute;
 
@@ -2086,7 +2143,6 @@ export function AkiraPlayer({
         });
     }, [episodes, selectedSeasonNumber]);
 
-    // Controls actions
     const togglePlay = () => {
         const v = videoRef.current;
         if (!v) return;
@@ -2097,11 +2153,9 @@ export function AkiraPlayer({
             v.play().catch(() => {
                 /* noop */
             });
-            // ✅ Si arranca a reproducir: mostrar ícono de PAUSE
             flashFeedbackIcon(ICONS.pause, "Pausa");
         } else {
             v.pause();
-            // ✅ Si pausa: mostrar ícono de PLAY
             flashFeedbackIcon(ICONS.play, "Play");
         }
     };
@@ -2487,9 +2541,13 @@ export function AkiraPlayer({
 
                     <div className="akira-modal-body">
                         {isEpisodesModalPreparing ? (
-                            <div className="akira-empty-state">Cargando episodios...</div>
+                            <div className="akira-empty-state">
+                                Cargando episodios...
+                            </div>
                         ) : episodes.length === 0 ? (
-                            <div className="akira-empty-state">No hay episodios cargados todavía.</div>
+                            <div className="akira-empty-state">
+                                No hay episodios cargados todavía.
+                            </div>
                         ) : episodesForSelectedSeason.length === 0 ? (
                             <div className="akira-empty-state">
                                 No hay episodios cargados para la temporada {selectedSeasonNumber}.
@@ -2503,8 +2561,8 @@ export function AkiraPlayer({
                                         ep.seasonNumber != null && ep.episodeNumber != null
                                             ? `T${ep.seasonNumber} · E${ep.episodeNumber}`
                                             : ep.episodeNumber != null
-                                              ? `E${ep.episodeNumber}`
-                                              : "Episodio";
+                                                ? `E${ep.episodeNumber}`
+                                                : "Episodio";
 
                                     const episodeThumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
 
@@ -2572,7 +2630,9 @@ export function AkiraPlayer({
                                                 </div>
 
                                                 {ep.synopsis && (
-                                                    <div className="akira-episode-synopsis">{ep.synopsis}</div>
+                                                    <div className="akira-episode-synopsis">
+                                                        {ep.synopsis}
+                                                    </div>
                                                 )}
 
                                                 <div
@@ -2650,8 +2710,8 @@ export function AkiraPlayer({
                                                     {item.type === "series"
                                                         ? "Serie"
                                                         : item.type === "movie"
-                                                          ? "Película"
-                                                          : item.type}
+                                                            ? "Película"
+                                                            : item.type}
                                                 </span>
                                             )}
                                         </div>
@@ -2735,12 +2795,10 @@ export function AkiraPlayer({
                     </span>
                 </div>
 
-                {/* ✅ Overlay global prev/next episode (fuera de center cluster) */}
                 {episodeNavOverlay && (
                     <div
-                        className={`akira-episode-step-overlay-layer ${
-                            episodeNavOverlay.direction === "prev" ? "is-prev" : "is-next"
-                        }`}
+                        className={`akira-episode-step-overlay-layer ${episodeNavOverlay.direction === "prev" ? "is-prev" : "is-next"
+                            }`}
                         aria-hidden="true"
                     >
                         {renderEpisodeStepPopover(
