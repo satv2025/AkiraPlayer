@@ -30,7 +30,12 @@ type RecommendedItem = {
 type EpisodeItem = {
     id: string;
     title: string;
+
+    /** Compat UI */
     synopsis?: string | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.sinopsis) */
+    sinopsis?: string | null;
 
     /** Compat viejo */
     thumbnail?: string | null;
@@ -45,8 +50,19 @@ type EpisodeItem = {
     thumbnails_episode?: string | null;
 
     seasonId?: string | null;
+
+    /** ✅ Compat UI actual */
     seasonNumber?: number | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.season) */
+    season?: number | null;
+
+    /** ✅ Compat UI actual */
     episodeNumber?: number | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.episode_number) */
+    episode_number?: number | null;
+
     durationSeconds?: number | null;
 };
 
@@ -201,6 +217,43 @@ function pickEpisodeThumbValue(
 
 function getEpisodeThumbSrc(ep: EpisodeItem, hydratedThumb?: string | null): string | null {
     return pickEpisodeThumbValue(ep) ?? (hydratedThumb ? normalizeMaybeRelativeUrl(hydratedThumb) : null);
+}
+
+/** ✅ Lee temporada tanto desde UI (seasonNumber) como desde Supabase (season) */
+function getEpisodeSeasonNumberValue(
+    ep: Partial<EpisodeItem> | null | undefined
+): number | null {
+    if (!ep) return null;
+
+    const raw = (ep as any).seasonNumber ?? (ep as any).season ?? null;
+    const n = Number(raw);
+
+    return Number.isFinite(n) ? n : null;
+}
+
+/** ✅ Lee número de episodio tanto desde UI (episodeNumber) como desde Supabase (episode_number) */
+function getEpisodeNumberValue(
+    ep: Partial<EpisodeItem> | null | undefined
+): number | null {
+    if (!ep) return null;
+
+    const raw = (ep as any).episodeNumber ?? (ep as any).episode_number ?? null;
+    const n = Number(raw);
+
+    return Number.isFinite(n) ? n : null;
+}
+
+/** ✅ Lee sinopsis tanto desde UI (synopsis) como desde Supabase (sinopsis) */
+function getEpisodeSynopsisValue(
+    ep: Partial<EpisodeItem> | null | undefined
+): string | null {
+    if (!ep) return null;
+
+    const raw = (ep as any).synopsis ?? (ep as any).sinopsis ?? null;
+    if (raw == null) return null;
+
+    const text = String(raw).trim();
+    return text.length ? text : null;
 }
 
 function getIcons(assetBase: string) {
@@ -694,8 +747,8 @@ export function AkiraPlayer({
 
     const topMetaEpisodeLine = useMemo(() => {
         if (!isSeriesContext) return "";
-        const s = currentEpisodeData?.seasonNumber ?? (selectedSeasonNumber || undefined);
-        const e = currentEpisodeData?.episodeNumber;
+        const s = getEpisodeSeasonNumberValue(currentEpisodeData) ?? (selectedSeasonNumber || undefined);
+        const e = getEpisodeNumberValue(currentEpisodeData);
         const epTitle = currentEpisodeData?.title?.trim() || "";
 
         if (s != null && e != null) return `Temporada ${s} · E${e}${epTitle ? ` ${epTitle}` : ""}`;
@@ -706,12 +759,12 @@ export function AkiraPlayer({
 
     const orderedEpisodes = useMemo(() => {
         return [...episodes].sort((a, b) => {
-            const sa = a.seasonNumber ?? 1;
-            const sb = b.seasonNumber ?? 1;
+            const sa = getEpisodeSeasonNumberValue(a) ?? 1;
+            const sb = getEpisodeSeasonNumberValue(b) ?? 1;
             if (sa !== sb) return sa - sb;
 
-            const ea = a.episodeNumber ?? 0;
-            const eb = b.episodeNumber ?? 0;
+            const ea = getEpisodeNumberValue(a) ?? 0;
+            const eb = getEpisodeNumberValue(b) ?? 0;
             if (ea !== eb) return ea - eb;
 
             return String(a.id).localeCompare(String(b.id));
@@ -741,8 +794,8 @@ export function AkiraPlayer({
         const compact = episodes.map((ep) => [
             String(ep.id),
             ep.seasonId ?? null,
-            ep.seasonNumber ?? null,
-            ep.episodeNumber ?? null,
+            getEpisodeSeasonNumberValue(ep),
+            getEpisodeNumberValue(ep),
             ep.durationSeconds ?? null,
             Boolean(pickEpisodeThumbValue(ep))
         ]);
@@ -978,6 +1031,10 @@ export function AkiraPlayer({
         if (episodeNavOverlay.direction !== direction) return null;
         if (episodeNavOverlay.episode?.id !== ep.id) return null;
 
+        const seasonNum = getEpisodeSeasonNumberValue(episodeNavOverlay.episode);
+        const episodeNum = getEpisodeNumberValue(episodeNavOverlay.episode);
+        const overlaySynopsis = getEpisodeSynopsisValue(episodeNavOverlay.episode);
+
         return (
             <div className={`akira-episode-step-popover ${episodeNavOverlay.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-episode-nav-thumb">
@@ -994,12 +1051,12 @@ export function AkiraPlayer({
                     </div>
 
                     <div className="akira-episode-nav-title" title={episodeNavOverlay.episode.title}>
-                        {`T${episodeNavOverlay.episode.seasonNumber ?? "?"}E${episodeNavOverlay.episode.episodeNumber ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
+                        {`T${seasonNum ?? "?"}E${episodeNum ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
                     </div>
 
-                    {episodeNavOverlay.episode.synopsis ? (
+                    {overlaySynopsis ? (
                         <div className="akira-episode-nav-synopsis">
-                            {episodeNavOverlay.episode.synopsis}
+                            {overlaySynopsis}
                         </div>
                     ) : null}
                 </div>
@@ -2149,11 +2206,31 @@ export function AkiraPlayer({
     const hasEpisodes = episodes.length > 0;
     const hasRecommendations = recommendations.length > 0;
 
-    const seasonDropdownOptions = useMemo(() => [1, 2], []);
+    /** ✅ Detecta temporadas reales desde episodes (seasonNumber | season) */
+    const seasonDropdownOptions = useMemo(() => {
+        const seasons = Array.from(
+            new Set(
+                episodes
+                    .map((ep) => getEpisodeSeasonNumberValue(ep))
+                    .filter((n): n is number => n != null)
+            )
+        ).sort((a, b) => a - b);
+
+        return seasons.length ? seasons : [1];
+    }, [episodes]);
+
+    /** ✅ Si cambian episodios/temporadas, mantiene una temporada válida seleccionada */
+    useEffect(() => {
+        if (!seasonDropdownOptions.length) return;
+
+        setSelectedSeasonNumber((prev) =>
+            seasonDropdownOptions.includes(prev) ? prev : seasonDropdownOptions[0]
+        );
+    }, [seasonDropdownOptions]);
 
     const episodesForSelectedSeason = useMemo(() => {
         return episodes.filter((ep) => {
-            const epSeason = ep.seasonNumber ?? 1;
+            const epSeason = getEpisodeSeasonNumberValue(ep) ?? 1;
             return epSeason === selectedSeasonNumber;
         });
     }, [episodes, selectedSeasonNumber]);
@@ -2273,8 +2350,9 @@ export function AkiraPlayer({
         closeFloatingPanels();
 
         const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
-        const nextSeason = currentEpisode?.seasonNumber === 2 ? 2 : 1;
-        setSelectedSeasonNumber(nextSeason);
+        const currentSeason = getEpisodeSeasonNumberValue(currentEpisode);
+
+        setSelectedSeasonNumber(currentSeason ?? seasonDropdownOptions[0] ?? 1);
         setShowSeasonDropdown(false);
 
         try {
@@ -2573,11 +2651,15 @@ export function AkiraPlayer({
                                 {episodesForSelectedSeason.map((ep) => {
                                     const isCurrent = !!episodeId && ep.id === episodeId;
 
+                                    const seasonNum = getEpisodeSeasonNumberValue(ep);
+                                    const episodeNum = getEpisodeNumberValue(ep);
+                                    const episodeSynopsis = getEpisodeSynopsisValue(ep);
+
                                     const epLabel =
-                                        ep.seasonNumber != null && ep.episodeNumber != null
-                                            ? `T${ep.seasonNumber} · E${ep.episodeNumber}`
-                                            : ep.episodeNumber != null
-                                                ? `E${ep.episodeNumber}`
+                                        seasonNum != null && episodeNum != null
+                                            ? `T${seasonNum} · E${episodeNum}`
+                                            : episodeNum != null
+                                                ? `E${episodeNum}`
                                                 : "Episodio";
 
                                     const episodeThumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
@@ -2645,9 +2727,9 @@ export function AkiraPlayer({
                                                     )}
                                                 </div>
 
-                                                {ep.synopsis && (
+                                                {episodeSynopsis && (
                                                     <div className="akira-episode-synopsis">
-                                                        {ep.synopsis}
+                                                        {episodeSynopsis}
                                                     </div>
                                                 )}
 
