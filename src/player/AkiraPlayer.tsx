@@ -1017,6 +1017,7 @@ export function AkiraPlayer({
         navigateEpisodeWithOverlay(nextEpisodeInPlaylist, "next");
     };
 
+    // ✅ Reset handshake cuando cambia reproducción
     useEffect(() => {
         setIsMediaHandshakeReady(false);
         setIsPreparingOverlayGoneCommitted(false);
@@ -1052,6 +1053,7 @@ export function AkiraPlayer({
         setEpisodeNavOverlay(null);
     }, [playbackHandshakeKey, clearInstantUnmuteTimers]);
 
+    // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1133,6 +1135,7 @@ export function AkiraPlayer({
         };
     }, [isPlayerBootReady, src, contentId, episodeId, playbackHandshakeKey]);
 
+    // ✅ Confirmar en DOM que el overlay "Preparando reproducción..." realmente desapareció (commit + RAF)
     useLayoutEffect(() => {
         let cancelled = false;
         let rafId: number | null = null;
@@ -1161,6 +1164,7 @@ export function AkiraPlayer({
         };
     }, [isPreparingUiVisible, isPreparingOverlayVisibleInDom, playbackHandshakeKey]);
 
+    // ✅ Evento custom para handshake con watch.html/watch.js
     useEffect(() => {
         if (typeof window === "undefined") return;
 
@@ -1303,6 +1307,7 @@ export function AkiraPlayer({
         isPreparingOverlayVisibleInDom
     ]);
 
+    // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
 
@@ -1527,6 +1532,7 @@ export function AkiraPlayer({
         };
     }, [src, isPlayerBootReady]);
 
+    // Video events (gated por boot)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1674,6 +1680,7 @@ export function AkiraPlayer({
         forceInstantUnmute
     ]);
 
+    // ✅ Autoplay reforzado POST-handshake (audio -> muted bootstrap -> instant unmute)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1782,6 +1789,7 @@ export function AkiraPlayer({
         forceInstantUnmute
     ]);
 
+    // Fullscreen state
     useEffect(() => {
         const onFsChange = () => {
             setIsFullscreen(Boolean(document.fullscreenElement));
@@ -1939,11 +1947,13 @@ export function AkiraPlayer({
         };
     }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
+    // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
         void hydrateEpisodesModalData();
     }, [showEpisodes, hydrateEpisodesModalData]);
 
+    // Thumbnails VTT (hover preview)
     useEffect(() => {
         let cancelled = false;
 
@@ -1967,6 +1977,7 @@ export function AkiraPlayer({
         };
     }, [thumbnailsVtt]);
 
+    // Keyboard shortcuts
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
@@ -2020,6 +2031,7 @@ export function AkiraPlayer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Cerrar dropdown custom
     useEffect(() => {
         if (!showSeasonDropdown) return;
 
@@ -2045,6 +2057,7 @@ export function AkiraPlayer({
         };
     }, [showSeasonDropdown]);
 
+    // CSS var volume fill
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -2066,6 +2079,7 @@ export function AkiraPlayer({
         };
     }, []);
 
+    // Cleanup timers
     useEffect(() => {
         return () => {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
@@ -2101,6 +2115,7 @@ export function AkiraPlayer({
         };
     }, [clearInstantUnmuteTimers]);
 
+    // Derived
     const volumeIcon = useMemo(() => {
         if (muted) return ICONS.volume.mute;
 
@@ -2143,6 +2158,7 @@ export function AkiraPlayer({
         });
     }, [episodes, selectedSeasonNumber]);
 
+    // Controls actions
     const togglePlay = () => {
         const v = videoRef.current;
         if (!v) return;
@@ -2748,20 +2764,33 @@ export function AkiraPlayer({
                     >
                         <div className="akira-progress-visual" aria-hidden="true">
                             <div className="akira-progress-track" />
-                            <div className="akira-progress-buffered" style={{ width: `${bufferedPct}%` }} />
-                            <div className="akira-progress-played" style={{ width: `${progressPct}%` }} />
+                            <div
+                                className="akira-progress-buffered"
+                                style={{ width: `${isLiveMode ? 100 : bufferedPct}%` }}
+                            />
+                            <div
+                                className="akira-progress-played"
+                                style={{ width: `${isLiveMode ? 100 : progressPct}%` }}
+                            />
                         </div>
 
                         <input
                             className="akira-progress"
                             type="range"
                             min={0}
-                            max={duration || 0}
-                            step={0.1}
-                            value={Math.min(currentTime, duration || 0)}
-                            onChange={(e) => onSeekBarChange(Number(e.target.value))}
-                            onInput={(e) => onSeekBarChange(Number((e.target as HTMLInputElement).value))}
+                            max={isLiveMode ? 100 : duration || 0}
+                            step={isLiveMode ? 1 : 0.1}
+                            value={isLiveMode ? 100 : Math.min(currentTime, duration || 0)}
+                            onChange={(e) => {
+                                if (isLiveMode) return;
+                                onSeekBarChange(Number(e.target.value));
+                            }}
+                            onInput={(e) => {
+                                if (isLiveMode) return;
+                                onSeekBarChange(Number((e.target as HTMLInputElement).value));
+                            }}
                             aria-label={isLiveMode ? "Timeline en vivo" : "Progreso"}
+                            disabled={isLiveMode}
                         />
 
                         {!isLiveMode && showThumbPreview && hoverTime != null && (
@@ -2795,6 +2824,7 @@ export function AkiraPlayer({
                     </span>
                 </div>
 
+                {/* ✅ Overlay global prev/next episode (fuera de center cluster) */}
                 {episodeNavOverlay && (
                     <div
                         className={`akira-episode-step-overlay-layer ${episodeNavOverlay.direction === "prev" ? "is-prev" : "is-next"
