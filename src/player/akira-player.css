@@ -377,7 +377,7 @@
 .akira-episode-info {
     min-width: 0;
     display: grid;
-    align-content: start;
+    align-content: center;
     gap: 7px;
 }
 
