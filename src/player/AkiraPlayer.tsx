@@ -147,6 +147,14 @@ type ProgressRowLike = {
     episode_id_db?: string | null;
 };
 
+/**
+ * ✅ IDs de public.movies.id que deben usar object-fit: contain
+ */
+const MOVIES_CONTAIN_VIDEO_IDS = new Set<string>([
+    "543dfb23-36bd-4b95-b868-79cd79754ca7",
+    "476138ce-8aaf-47c2-85b8-410083439213"
+]);
+
 function clamp(n: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, n));
 }
@@ -567,6 +575,15 @@ export function AkiraPlayer({
 
     const resolvedAssetBase = (assetBaseUrl || assetBase || "/assets").replace(/\/$/, "");
     const ICONS = useMemo(() => getIcons(resolvedAssetBase), [resolvedAssetBase]);
+
+    /**
+     * ✅ Detecta solo por public.movies.id (contentId)
+     * Si matchea, el video va con object-fit: contain
+     */
+    const shouldUseContainVideo = useMemo(() => {
+        const movieId = String(contentId || "").trim();
+        return MOVIES_CONTAIN_VIDEO_IDS.has(movieId);
+    }, [contentId]);
 
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -1460,7 +1477,9 @@ export function AkiraPlayer({
             isHlsSource,
             nativeHlsCanPlay,
             hlsJsSupported,
-            safariLikeNative: isSafariLikeForNativeHls()
+            safariLikeNative: isSafariLikeForNativeHls(),
+            contentId,
+            shouldUseContainVideo
         });
 
         if (isDashSource) {
@@ -1587,7 +1606,7 @@ export function AkiraPlayer({
                 // noop
             }
         };
-    }, [src, isPlayerBootReady]);
+    }, [src, isPlayerBootReady, contentId, shouldUseContainVideo]);
 
     // Video events (gated por boot)
     useEffect(() => {
@@ -2419,12 +2438,14 @@ export function AkiraPlayer({
             <video
                 ref={videoRef}
                 className={`akira-video ${isLiveMode ? "is-live" : ""}`}
+                style={shouldUseContainVideo ? { objectFit: "contain" } : undefined}
                 poster={poster}
                 playsInline
                 controls={false}
                 preload="metadata"
                 crossOrigin="anonymous"
                 autoPlay={false}
+                data-akira-fit={shouldUseContainVideo ? "contain" : "cover"}
             >
                 {subtitles.map((t) => (
                     <track
