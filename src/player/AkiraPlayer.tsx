@@ -31,19 +31,36 @@ type EpisodeItem = {
     id: string;
     title: string;
 
+    /** Compat UI */
     synopsis?: string | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.sinopsis) */
     sinopsis?: string | null;
 
+    /** Compat viejo */
     thumbnail?: string | null;
+
+    /** Alias limpio */
     thumbnailEpisode?: string | null;
+
+    /** Columna literal de DB (si llega así) */
     "thumbnails-episode"?: string | null;
+
+    /** Compat snake_case */
     thumbnails_episode?: string | null;
 
     seasonId?: string | null;
+
+    /** ✅ Compat UI actual */
     seasonNumber?: number | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.season) */
     season?: number | null;
 
+    /** ✅ Compat UI actual */
     episodeNumber?: number | null;
+
+    /** ✅ Compat con tu tabla Supabase (public.episodes.episode_number) */
     episode_number?: number | null;
 
     durationSeconds?: number | null;
@@ -53,13 +70,13 @@ type Props = {
     src: string;
     poster?: string;
     autoplay?: boolean;
-    title?: string;
+    title?: string; // puede venir mal (ej. "Episodio 2"), se hidrata desde movies por contentId
     channelLabel?: string;
 
     assetBase?: string;
     assetBaseUrl?: string;
 
-    contentId: string;
+    contentId: string; // UUID de movies.id
     seasonId?: string | null;
     episodeId?: string | null;
 
@@ -76,6 +93,8 @@ type Props = {
     onSelectEpisode?: (episodeId: string, episode?: EpisodeItem) => void;
 
     recommendationsLabel?: string;
+
+    /** ✅ Playlist mode: al terminar, reproduce el siguiente episodio */
     playlistMode?: boolean;
 };
 
@@ -99,26 +118,6 @@ type MovieTitleDbRow = {
     id?: string | null;
     title?: string | null;
     category?: string | null;
-    collection_id?: string | null;
-};
-
-type CollectionMetaRow = {
-    id?: string | null;
-    title?: string | null;
-    description?: string | null;
-    thumbnail_url?: string | null;
-    banner_url?: string | null;
-};
-
-type CollectionMovieRow = {
-    id?: string | null;
-    title?: string | null;
-    description?: string | null;
-    thumbnail_url?: string | null;
-    banner_url?: string | null;
-    collection_id?: string | null;
-    duration_minutes?: number | null;
-    created_at?: string | null;
 };
 
 type FeedbackState = {
@@ -148,6 +147,9 @@ type ProgressRowLike = {
     episode_id_db?: string | null;
 };
 
+/**
+ * ✅ IDs de public.movies.id que deben usar object-fit: contain
+ */
 const MOVIES_CONTAIN_VIDEO_IDS = new Set<string>([
     "543dfb23-36bd-4b95-b868-79cd79754ca7",
     "476138ce-8aaf-47c2-85b8-410083439213"
@@ -203,7 +205,7 @@ function normalizeMaybeRelativeUrl(input: string): string {
 }
 
 function pickEpisodeThumbValue(
-    obj: Partial<EpisodeItem> | Partial<EpisodesThumbDbRow> | Partial<CollectionMovieRow> | null | undefined
+    obj: Partial<EpisodeItem> | Partial<EpisodesThumbDbRow> | null | undefined
 ): string | null {
     if (!obj) return null;
 
@@ -212,8 +214,6 @@ function pickEpisodeThumbValue(
         (obj as any).thumbnailEpisode ??
         (obj as any).thumbnails_episode ??
         (obj as any).thumbnail ??
-        (obj as any).thumbnail_url ??
-        (obj as any).banner_url ??
         null;
 
     if (!src) return null;
@@ -227,6 +227,7 @@ function getEpisodeThumbSrc(ep: EpisodeItem, hydratedThumb?: string | null): str
     return pickEpisodeThumbValue(ep) ?? (hydratedThumb ? normalizeMaybeRelativeUrl(hydratedThumb) : null);
 }
 
+/** ✅ Lee temporada tanto desde UI (seasonNumber) como desde Supabase (season) */
 function getEpisodeSeasonNumberValue(
     ep: Partial<EpisodeItem> | null | undefined
 ): number | null {
@@ -238,6 +239,7 @@ function getEpisodeSeasonNumberValue(
     return Number.isFinite(n) ? n : null;
 }
 
+/** ✅ Lee número de episodio tanto desde UI (episodeNumber) como desde Supabase (episode_number) */
 function getEpisodeNumberValue(
     ep: Partial<EpisodeItem> | null | undefined
 ): number | null {
@@ -249,6 +251,7 @@ function getEpisodeNumberValue(
     return Number.isFinite(n) ? n : null;
 }
 
+/** ✅ Lee sinopsis tanto desde UI (synopsis) como desde Supabase (sinopsis) */
 function getEpisodeSynopsisValue(
     ep: Partial<EpisodeItem> | null | undefined
 ): string | null {
@@ -365,7 +368,7 @@ function isVideoElementPlaybackReady(video: HTMLVideoElement | null | undefined)
     const hasSource = Boolean(video.currentSrc || video.getAttribute("src"));
     if (!hasSource) return false;
     const rs = Number(video.readyState || 0);
-    return rs >= 1;
+    return rs >= 1; // HAVE_METADATA+
 }
 
 async function loadEpisodesProgressReal(params: {
@@ -511,109 +514,38 @@ async function loadEpisodeThumbsFromSupabase(params: {
     return result;
 }
 
+/** ✅ Título real de la serie/película desde public.movies por UUID */
 async function loadContentTitleFromMovies(params: {
     contentId: string;
-}): Promise<{ title: string | null; category: string | null; collectionId: string | null }> {
+}): Promise<{ title: string | null; category: string | null }> {
     const { contentId } = params;
-    if (!contentId) return { title: null, category: null, collectionId: null };
+    if (!contentId) return { title: null, category: null };
 
     const moviesTable = String((CONFIG as any)?.MOVIES_TABLE || "movies");
 
     try {
         const { data, error } = await (supabase as any)
             .from(moviesTable)
-            .select("id,title,category,collection_id")
+            .select("id,title,category")
             .eq("id", contentId)
             .maybeSingle();
 
         if (error) {
-            console.warn("[AkiraPlayer] Error leyendo movie desde movies:", error);
-            return { title: null, category: null, collectionId: null };
+            console.warn("[AkiraPlayer] Error leyendo title desde movies:", error);
+            return { title: null, category: null };
         }
 
         const row = (data || null) as MovieTitleDbRow | null;
         const title = row?.title ? String(row.title).trim() : null;
         const category = row?.category ? String(row.category).trim() : null;
-        const collectionId = row?.collection_id ? String(row.collection_id).trim() : null;
 
         return {
             title: title && title.length ? title : null,
-            category: category && category.length ? category : null,
-            collectionId: collectionId && collectionId.length ? collectionId : null
+            category: category && category.length ? category : null
         };
     } catch (e) {
-        console.warn("[AkiraPlayer] Excepción leyendo movie desde movies:", e);
-        return { title: null, category: null, collectionId: null };
-    }
-}
-
-async function loadCollectionMetaById(collectionId: string): Promise<CollectionMetaRow | null> {
-    if (!collectionId) return null;
-
-    try {
-        const { data, error } = await (supabase as any)
-            .from("collections")
-            .select("id,title,description,thumbnail_url,banner_url")
-            .eq("id", collectionId)
-            .maybeSingle();
-
-        if (error) {
-            console.warn("[AkiraPlayer] Error leyendo metadata de collection:", error);
-            return null;
-        }
-
-        return (data || null) as CollectionMetaRow | null;
-    } catch (e) {
-        console.warn("[AkiraPlayer] Excepción leyendo metadata de collection:", e);
-        return null;
-    }
-}
-
-async function loadCollectionMoviesByCollectionId(collectionId: string): Promise<EpisodeItem[]> {
-    if (!collectionId) return [];
-
-    const moviesTable = String((CONFIG as any)?.MOVIES_TABLE || "movies");
-
-    try {
-        const { data, error } = await (supabase as any)
-            .from(moviesTable)
-            .select(`
-                id,
-                title,
-                description,
-                thumbnail_url,
-                banner_url,
-                duration_minutes,
-                created_at,
-                collection_id
-            `)
-            .eq("collection_id", collectionId)
-            .order("created_at", { ascending: true });
-
-        if (error) {
-            console.warn("[AkiraPlayer] Error leyendo items de collection desde movies:", error);
-            return [];
-        }
-
-        return (Array.isArray(data) ? data : []).map((row: CollectionMovieRow, index: number) => ({
-            id: String(row.id || ""),
-            title: String(row.title || "Sin título"),
-            synopsis: row.description ?? null,
-            sinopsis: row.description ?? null,
-            thumbnail: row.thumbnail_url || row.banner_url || null,
-            thumbnailEpisode: row.thumbnail_url || row.banner_url || null,
-            seasonNumber: 1,
-            season: 1,
-            episodeNumber: index + 1,
-            episode_number: index + 1,
-            durationSeconds:
-                row.duration_minutes != null && Number.isFinite(Number(row.duration_minutes))
-                    ? Number(row.duration_minutes) * 60
-                    : null
-        }));
-    } catch (e) {
-        console.warn("[AkiraPlayer] Excepción leyendo items de collection:", e);
-        return [];
+        console.warn("[AkiraPlayer] Excepción leyendo title desde movies:", e);
+        return { title: null, category: null };
     }
 }
 
@@ -644,6 +576,10 @@ export function AkiraPlayer({
     const resolvedAssetBase = (assetBaseUrl || assetBase || "/assets").replace(/\/$/, "");
     const ICONS = useMemo(() => getIcons(resolvedAssetBase), [resolvedAssetBase]);
 
+    /**
+     * ✅ Detecta solo por public.movies.id (contentId)
+     * Si matchea, el video va con object-fit: contain
+     */
     const shouldUseContainVideo = useMemo(() => {
         const movieId = String(contentId || "").trim();
         return MOVIES_CONTAIN_VIDEO_IDS.has(movieId);
@@ -663,23 +599,29 @@ export function AkiraPlayer({
     const controlsHideTimerRef = useRef<number | null>(null);
     const feedbackTimerRef = useRef<number | null>(null);
 
+    /** ✅ Handshake con watch.html/watch.js */
     const handshakePreparingSentKeyRef = useRef<string>("");
     const handshakeReadySentKeyRef = useRef<string>("");
     const handshakeReadyRafRef = useRef<number | null>(null);
     const mediaReadyProbeTimerRef = useRef<number | null>(null);
 
+    /** ✅ Autoplay retries */
     const autoplayRetryTimerRef = useRef<number | null>(null);
     const autoplayFinalRetryTimerRef = useRef<number | null>(null);
 
+    /** ✅ Instant unmute timers/flags (autoplay bootstrap muted -> unmute ASAP) */
     const instantUnmuteTimerRef = useRef<number | null>(null);
     const instantUnmuteRafRef = useRef<number | null>(null);
     const pendingInstantUnmuteRef = useRef(false);
 
+    /** ✅ Overlay/timers de navegación episodio prev/next */
     const episodeNavOverlayHideTimerRef = useRef<number | null>(null);
     const episodeNavCommitTimerRef = useRef<number | null>(null);
 
+    /** ✅ Para forzar autoplay cuando avanza al siguiente episodio en playlist mode */
     const playlistNextAutoplayRef = useRef(false);
 
+    /** ✅ Evita races y duplicados al hidratar modal */
     const episodesModalHydrationSeqRef = useRef(0);
     const episodesModalHydratedSignatureRef = useRef<string>("");
 
@@ -700,18 +642,19 @@ export function AkiraPlayer({
     const [episodeThumbsMap, setEpisodeThumbsMap] = useState<Record<string, string>>({});
     const [isEpisodesModalPreparing, setIsEpisodesModalPreparing] = useState(false);
 
+    /** ✅ Boot gate: primero data, después reproducción */
     const [isPlayerBootPreparing, setIsPlayerBootPreparing] = useState(true);
     const [isPlayerBootReady, setIsPlayerBootReady] = useState(false);
 
+    /** ✅ Media ready real (video con source + metadata) */
     const [isMediaHandshakeReady, setIsMediaHandshakeReady] = useState(false);
+
+    /** ✅ Confirmación de que el overlay de "Preparando reproducción..." ya desapareció del DOM */
     const [isPreparingOverlayGoneCommitted, setIsPreparingOverlayGoneCommitted] = useState(false);
 
+    /** ✅ título/categoría reales desde movies */
     const [contentTitleFromDb, setContentTitleFromDb] = useState<string | null>(null);
     const [contentCategoryFromDb, setContentCategoryFromDb] = useState<string | null>(null);
-    const [collectionIdFromMovie, setCollectionIdFromMovie] = useState<string | null>(null);
-    const [collectionMeta, setCollectionMeta] = useState<CollectionMetaRow | null>(null);
-    const [collectionItems, setCollectionItems] = useState<EpisodeItem[]>([]);
-    const [isCollectionPreparing, setIsCollectionPreparing] = useState(false);
 
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -783,19 +726,11 @@ export function AkiraPlayer({
     };
 
     const currentEpisodeData = useMemo(() => {
-        if (isCollectionContext) {
-            return modalItems.find((ep) => ep.id === contentId) ?? null;
-        }
         if (!episodeId) return null;
         return episodes.find((ep) => ep.id === episodeId) ?? null;
-    }, [episodes, episodeId, contentId]);
-
-    const isCollectionContext = useMemo(() => {
-        return Boolean(collectionIdFromMovie);
-    }, [collectionIdFromMovie]);
+    }, [episodes, episodeId]);
 
     const isSeriesContext = useMemo(() => {
-        if (isCollectionContext) return true;
         if (contentCategoryFromDb === "series") return true;
         if (contentCategoryFromDb === "movie") return false;
 
@@ -810,7 +745,7 @@ export function AkiraPlayer({
         }
 
         return Boolean(episodeId);
-    }, [isCollectionContext, contentCategoryFromDb, episodeId]);
+    }, [contentCategoryFromDb, episodeId]);
 
     const displayContentTitle = useMemo(() => {
         const dbTitle = (contentTitleFromDb || "").trim();
@@ -822,14 +757,13 @@ export function AkiraPlayer({
         return "AkiraPlayer";
     }, [contentTitleFromDb, title]);
 
+    /** ✅ Live mode detectado por URL DASH (.mpd) */
     const isLiveMode = useMemo(() => {
         return isMpdUrl(src);
     }, [src]);
 
     const topMetaEpisodeLine = useMemo(() => {
         if (!isSeriesContext) return "";
-        if (isCollectionContext) return collectionMeta?.title?.trim() || "Colección";
-
         const s = getEpisodeSeasonNumberValue(currentEpisodeData) ?? (selectedSeasonNumber || undefined);
         const e = getEpisodeNumberValue(currentEpisodeData);
         const epTitle = currentEpisodeData?.title?.trim() || "";
@@ -838,16 +772,10 @@ export function AkiraPlayer({
         if (s != null && epTitle) return `Temporada ${s} · ${epTitle}`;
         if (epTitle) return epTitle;
         return "";
-    }, [isSeriesContext, isCollectionContext, collectionMeta, currentEpisodeData, selectedSeasonNumber]);
-
-    const modalItems = useMemo(() => {
-        return isCollectionContext ? collectionItems : episodes;
-    }, [isCollectionContext, collectionItems, episodes]);
+    }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
 
     const orderedEpisodes = useMemo(() => {
-        const source = isCollectionContext ? collectionItems : episodes;
-
-        return [...source].sort((a, b) => {
+        return [...episodes].sort((a, b) => {
             const sa = getEpisodeSeasonNumberValue(a) ?? 1;
             const sb = getEpisodeSeasonNumberValue(b) ?? 1;
             if (sa !== sb) return sa - sb;
@@ -858,13 +786,12 @@ export function AkiraPlayer({
 
             return String(a.id).localeCompare(String(b.id));
         });
-    }, [isCollectionContext, collectionItems, episodes]);
+    }, [episodes]);
 
     const currentEpisodeIndexInPlaylist = useMemo(() => {
-        const currentId = isCollectionContext ? contentId : episodeId;
-        if (!currentId) return -1;
-        return orderedEpisodes.findIndex((ep) => ep.id === currentId);
-    }, [orderedEpisodes, isCollectionContext, contentId, episodeId]);
+        if (!episodeId) return -1;
+        return orderedEpisodes.findIndex((ep) => ep.id === episodeId);
+    }, [orderedEpisodes, episodeId]);
 
     const prevEpisodeInPlaylist = useMemo(() => {
         if (currentEpisodeIndexInPlaylist < 0) return null;
@@ -881,7 +808,7 @@ export function AkiraPlayer({
     }, [currentEpisodeData, seasonId]);
 
     const episodesModalDataSignature = useMemo(() => {
-        const compact = modalItems.map((ep) => [
+        const compact = episodes.map((ep) => [
             String(ep.id),
             ep.seasonId ?? null,
             getEpisodeSeasonNumberValue(ep),
@@ -892,10 +819,9 @@ export function AkiraPlayer({
         return JSON.stringify({
             contentId: String(contentId || ""),
             seasonId: seasonId ?? null,
-            collectionIdFromMovie: collectionIdFromMovie ?? null,
-            items: compact
+            episodes: compact
         });
-    }, [contentId, seasonId, modalItems, collectionIdFromMovie]);
+    }, [contentId, seasonId, episodes]);
 
     const playbackHandshakeKey = useMemo(() => {
         return JSON.stringify({
@@ -911,13 +837,6 @@ export function AkiraPlayer({
         async (opts?: { force?: boolean; silent?: boolean }) => {
             const force = Boolean(opts?.force);
             const silent = Boolean(opts?.silent);
-
-            if (isCollectionContext) {
-                setEpisodeProgressMap({});
-                setEpisodeThumbsMap({});
-                episodesModalHydratedSignatureRef.current = episodesModalDataSignature;
-                return;
-            }
 
             if (!contentId || !episodes.length) {
                 setEpisodeProgressMap({});
@@ -961,7 +880,7 @@ export function AkiraPlayer({
                 }
             }
         },
-        [contentId, seasonId, episodes, episodesModalDataSignature, isCollectionContext]
+        [contentId, seasonId, episodes, episodesModalDataSignature]
     );
 
     const isPreparingOverlayVisibleInDom = useCallback((): boolean => {
@@ -987,9 +906,7 @@ export function AkiraPlayer({
             const sp = current.searchParams;
 
             let targetUrl = "";
-            if (isCollectionContext && collectionIdFromMovie) {
-                targetUrl = `/title?collection=${encodeURIComponent(collectionIdFromMovie)}&title=${encodeURIComponent(contentId)}`;
-            } else if (sp.has("series") || isSeriesContext) {
+            if (sp.has("series") || isSeriesContext) {
                 targetUrl = `/title?series=${encodeURIComponent(contentId)}`;
             } else if (sp.has("movie")) {
                 targetUrl = `/title?movie=${encodeURIComponent(contentId)}`;
@@ -1147,13 +1064,11 @@ export function AkiraPlayer({
 
                 <div className="akira-episode-nav-body">
                     <div className="akira-episode-nav-kicker">
-                        {direction === "next" ? "Siguiente" : "Anterior"}
+                        {direction === "next" ? "Episodio siguiente" : "Episodio anterior"}
                     </div>
 
                     <div className="akira-episode-nav-title" title={episodeNavOverlay.episode.title}>
-                        {isCollectionContext
-                            ? episodeNavOverlay.episode.title
-                            : `T${seasonNum ?? "?"}E${episodeNum ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
+                        {`T${seasonNum ?? "?"}E${episodeNum ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
                     </div>
 
                     {overlaySynopsis ? (
@@ -1176,6 +1091,7 @@ export function AkiraPlayer({
         navigateEpisodeWithOverlay(nextEpisodeInPlaylist, "next");
     };
 
+    // ✅ Reset handshake cuando cambia reproducción
     useEffect(() => {
         setIsMediaHandshakeReady(false);
         setIsPreparingOverlayGoneCommitted(false);
@@ -1211,6 +1127,7 @@ export function AkiraPlayer({
         setEpisodeNavOverlay(null);
     }, [playbackHandshakeKey, clearInstantUnmuteTimers]);
 
+    // ✅ Detector real de "video listo" (source + metadata) para handshake con watch.html
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1292,6 +1209,7 @@ export function AkiraPlayer({
         };
     }, [isPlayerBootReady, src, contentId, episodeId, playbackHandshakeKey]);
 
+    // ✅ Confirmar en DOM que el overlay "Preparando reproducción..." realmente desapareció (commit + RAF)
     useLayoutEffect(() => {
         let cancelled = false;
         let rafId: number | null = null;
@@ -1320,6 +1238,7 @@ export function AkiraPlayer({
         };
     }, [isPreparingUiVisible, isPreparingOverlayVisibleInDom, playbackHandshakeKey]);
 
+    // ✅ Evento custom para handshake con watch.html/watch.js
     useEffect(() => {
         if (typeof window === "undefined") return;
 
@@ -1462,6 +1381,7 @@ export function AkiraPlayer({
         isPreparingOverlayVisibleInDom
     ]);
 
+    // ✅ BOOT SEQUENCE: primero título + data de episodios, luego reproducción
     useEffect(() => {
         let cancelled = false;
 
@@ -1476,14 +1396,12 @@ export function AkiraPlayer({
                     if (!cancelled) {
                         setContentTitleFromDb(null);
                         setContentCategoryFromDb(null);
-                        setCollectionIdFromMovie(null);
                     }
                 } else {
-                    const { title: movieTitle, category, collectionId } = await loadContentTitleFromMovies({ contentId });
+                    const { title: movieTitle, category } = await loadContentTitleFromMovies({ contentId });
                     if (!cancelled) {
                         setContentTitleFromDb(movieTitle);
                         setContentCategoryFromDb(category);
-                        setCollectionIdFromMovie(collectionId);
                     }
                 }
 
@@ -1503,47 +1421,7 @@ export function AkiraPlayer({
         };
     }, [contentId, episodesModalDataSignature, hydrateEpisodesModalData]);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        if (!collectionIdFromMovie) {
-            setCollectionMeta(null);
-            setCollectionItems([]);
-            setIsCollectionPreparing(false);
-            return;
-        }
-
-        (async () => {
-            setIsCollectionPreparing(true);
-
-            try {
-                const [meta, items] = await Promise.all([
-                    loadCollectionMetaById(collectionIdFromMovie),
-                    loadCollectionMoviesByCollectionId(collectionIdFromMovie)
-                ]);
-
-                if (cancelled) return;
-
-                setCollectionMeta(meta);
-                setCollectionItems(items);
-            } catch (e) {
-                console.warn("[AkiraPlayer] Error cargando collection mode:", e);
-                if (!cancelled) {
-                    setCollectionMeta(null);
-                    setCollectionItems([]);
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsCollectionPreparing(false);
-                }
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [collectionIdFromMovie]);
-
+    // ✅ MEDIA setup: DASH (.mpd) + HLS (.m3u8) + fallback directo
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !src) return;
@@ -1551,6 +1429,7 @@ export function AkiraPlayer({
 
         restoredRef.current = false;
 
+        // cleanup previo
         try {
             if (hlsRef.current) {
                 hlsRef.current.destroy();
@@ -1689,6 +1568,7 @@ export function AkiraPlayer({
             video.src = src;
             video.load();
         } else {
+            // fallback directo (mp4/webm/etc o URL no clasificada)
             console.log("[AkiraPlayer][MEDIA] fallback directo <video src>");
             video.src = src;
             video.load();
@@ -1728,6 +1608,7 @@ export function AkiraPlayer({
         };
     }, [src, isPlayerBootReady, contentId, shouldUseContainVideo]);
 
+    // Video events (gated por boot)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1808,7 +1689,6 @@ export function AkiraPlayer({
             setControlsVisible(true);
 
             if (
-                !isCollectionContext &&
                 playlistMode &&
                 isSeriesContext &&
                 nextEpisodeInPlaylist &&
@@ -1873,10 +1753,10 @@ export function AkiraPlayer({
         nextEpisodeInPlaylist,
         onSelectEpisode,
         isPlayerBootReady,
-        forceInstantUnmute,
-        isCollectionContext
+        forceInstantUnmute
     ]);
 
+    // ✅ Autoplay reforzado POST-handshake (audio -> muted bootstrap -> instant unmute)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1985,6 +1865,7 @@ export function AkiraPlayer({
         forceInstantUnmute
     ]);
 
+    // Fullscreen state
     useEffect(() => {
         const onFsChange = () => {
             setIsFullscreen(Boolean(document.fullscreenElement));
@@ -1994,6 +1875,7 @@ export function AkiraPlayer({
         return () => document.removeEventListener("fullscreenchange", onFsChange);
     }, []);
 
+    // Continue Watching (load episodio actual)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -2002,11 +1884,6 @@ export function AkiraPlayer({
         if (restoredRef.current) return;
 
         if (isLiveMode) {
-            restoredRef.current = true;
-            return;
-        }
-
-        if (isCollectionContext) {
             restoredRef.current = true;
             return;
         }
@@ -2076,16 +1953,15 @@ export function AkiraPlayer({
         episodeId,
         isSeriesContext,
         isPlayerBootReady,
-        isLiveMode,
-        isCollectionContext
+        isLiveMode
     ]);
 
+    // Continue Watching (throttled save)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
         if (!isPlayerBootReady) return;
         if (isLiveMode) return;
-        if (isCollectionContext) return;
 
         const onTimeUpdateSave = () => {
             const now = Date.now();
@@ -2108,14 +1984,14 @@ export function AkiraPlayer({
 
         v.addEventListener("timeupdate", onTimeUpdateSave);
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode, isCollectionContext]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
+    // Continue Watching (flush)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
         if (!isPlayerBootReady) return;
         if (isLiveMode) return;
-        if (isCollectionContext) return;
 
         const flush = () => {
             const total = v.duration || 0;
@@ -2145,13 +2021,15 @@ export function AkiraPlayer({
             window.removeEventListener("beforeunload", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode, isCollectionContext]);
+    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
 
+    // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
         if (!showEpisodes) return;
         void hydrateEpisodesModalData();
     }, [showEpisodes, hydrateEpisodesModalData]);
 
+    // Thumbnails VTT (hover preview)
     useEffect(() => {
         let cancelled = false;
 
@@ -2175,6 +2053,7 @@ export function AkiraPlayer({
         };
     }, [thumbnailsVtt]);
 
+    // Keyboard shortcuts
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
@@ -2228,6 +2107,7 @@ export function AkiraPlayer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Cerrar dropdown custom
     useEffect(() => {
         if (!showSeasonDropdown) return;
 
@@ -2253,6 +2133,7 @@ export function AkiraPlayer({
         };
     }, [showSeasonDropdown]);
 
+    // CSS var volume fill
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -2274,6 +2155,7 @@ export function AkiraPlayer({
         };
     }, []);
 
+    // Cleanup timers
     useEffect(() => {
         return () => {
             if (controlsHideTimerRef.current) window.clearTimeout(controlsHideTimerRef.current);
@@ -2309,6 +2191,7 @@ export function AkiraPlayer({
         };
     }, [clearInstantUnmuteTimers]);
 
+    // Derived
     const volumeIcon = useMemo(() => {
         if (muted) return ICONS.volume.mute;
 
@@ -2339,14 +2222,11 @@ export function AkiraPlayer({
     const hoverCueXYWH = hoverCueSafe?.xywh ?? null;
     const hoverTimeSafe = hoverTime ?? 0;
 
-    const hasEpisodes = modalItems.length > 0;
+    const hasEpisodes = episodes.length > 0;
     const hasRecommendations = recommendations.length > 0;
 
-    const episodesButtonLabel = isCollectionContext ? "Colección" : "Episodios";
-
+    /** ✅ Detecta temporadas reales desde episodes (seasonNumber | season) */
     const seasonDropdownOptions = useMemo(() => {
-        if (isCollectionContext) return [1];
-
         const seasons = Array.from(
             new Set(
                 episodes
@@ -2356,8 +2236,9 @@ export function AkiraPlayer({
         ).sort((a, b) => a - b);
 
         return seasons.length ? seasons : [1];
-    }, [isCollectionContext, episodes]);
+    }, [episodes]);
 
+    /** ✅ Si cambian episodios/temporadas, mantiene una temporada válida seleccionada */
     useEffect(() => {
         if (!seasonDropdownOptions.length) return;
 
@@ -2367,14 +2248,13 @@ export function AkiraPlayer({
     }, [seasonDropdownOptions]);
 
     const episodesForSelectedSeason = useMemo(() => {
-        if (isCollectionContext) return modalItems;
-
-        return modalItems.filter((ep) => {
+        return episodes.filter((ep) => {
             const epSeason = getEpisodeSeasonNumberValue(ep) ?? 1;
             return epSeason === selectedSeasonNumber;
         });
-    }, [isCollectionContext, modalItems, selectedSeasonNumber]);
+    }, [episodes, selectedSeasonNumber]);
 
+    // Controls actions
     const togglePlay = () => {
         const v = videoRef.current;
         if (!v) return;
@@ -2383,7 +2263,7 @@ export function AkiraPlayer({
 
         if (v.paused) {
             v.play().catch(() => {
-                // noop
+                /* noop */
             });
             flashFeedbackIcon(ICONS.pause, "Pausa");
         } else {
@@ -2488,35 +2368,23 @@ export function AkiraPlayer({
     const openEpisodesPanel = async () => {
         closeFloatingPanels();
 
-        if (!isCollectionContext) {
-            const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
-            const currentSeason = getEpisodeSeasonNumberValue(currentEpisode);
-            setSelectedSeasonNumber(currentSeason ?? seasonDropdownOptions[0] ?? 1);
+        const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
+        const currentSeason = getEpisodeSeasonNumberValue(currentEpisode);
 
-            try {
-                await hydrateEpisodesModalData();
-            } catch {
-                // noop
-            }
-        } else {
-            setSelectedSeasonNumber(1);
+        setSelectedSeasonNumber(currentSeason ?? seasonDropdownOptions[0] ?? 1);
+        setShowSeasonDropdown(false);
+
+        try {
+            await hydrateEpisodesModalData();
+        } catch {
+            // noop
         }
 
-        setShowSeasonDropdown(false);
         setShowEpisodes(true);
         showControlsTemporarily();
     };
 
     const handleEpisodeClick = (ep: EpisodeItem) => {
-        if (isCollectionContext && collectionIdFromMovie) {
-            const url = new URL(window.location.href);
-            url.search = "";
-            url.searchParams.set("collection", collectionIdFromMovie);
-            url.searchParams.set("movie", ep.id);
-            window.location.assign(url.toString());
-            return;
-        }
-
         if (onSelectEpisode) onSelectEpisode(ep.id, ep);
         setShowSeasonDropdown(false);
         setShowEpisodes(false);
@@ -2566,6 +2434,7 @@ export function AkiraPlayer({
             }}
             onContextMenu={(e) => e.preventDefault()}
         >
+            {/* VIDEO */}
             <video
                 ref={videoRef}
                 className={`akira-video ${isLiveMode ? "is-live" : ""}`}
@@ -2590,12 +2459,14 @@ export function AkiraPlayer({
                 ))}
             </video>
 
+            {/* OVERLAY de preparación real (boot + media) */}
             {isPreparingUiVisible && (
                 <div className="akira-overlay-shell" aria-hidden="true">
                     <div className="akira-empty-state">Preparando reproducción...</div>
                 </div>
             )}
 
+            {/* DOUBLE CLICK SEEK ZONES */}
             <div className="akira-gesture-layer" aria-hidden="true">
                 <button
                     type="button"
@@ -2623,6 +2494,7 @@ export function AkiraPlayer({
                 />
             </div>
 
+            {/* TOP OVERLAY */}
             <div className="akira-top-overlay">
                 <div
                     className="akira-top-left"
@@ -2662,6 +2534,7 @@ export function AkiraPlayer({
                 </div>
             </div>
 
+            {/* CENTER FEEDBACK */}
             <div className={`akira-feedback ${feedback?.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-feedback-pill">
                     {feedback?.iconSrc ? (
@@ -2676,6 +2549,7 @@ export function AkiraPlayer({
                 </div>
             </div>
 
+            {/* Backdrop paneles */}
             {(showEpisodes || showRecommendations) && (
                 <div
                     className="akira-overlay-shell"
@@ -2688,12 +2562,13 @@ export function AkiraPlayer({
                 />
             )}
 
+            {/* Modal Episodios */}
             {showEpisodes && (
                 <div
                     className="akira-modal"
                     role="dialog"
                     aria-modal="true"
-                    aria-label={episodesButtonLabel}
+                    aria-label="Episodios"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="akira-modal-header">
@@ -2707,63 +2582,61 @@ export function AkiraPlayer({
                             }}
                         >
                             <div className="akira-modal-title">
-                                {displayContentTitle} · {isCollectionContext ? "Colección" : "Listado de episodios"}
+                                {displayContentTitle} · Listado de episodios
                             </div>
 
-                            {!isCollectionContext && (
-                                <div className="akira-season-dd" ref={seasonDropdownRef}>
-                                    <button
-                                        type="button"
-                                        className={`akira-season-dd-trigger ${showSeasonDropdown ? "open" : ""}`}
-                                        aria-haspopup="menu"
-                                        aria-expanded={showSeasonDropdown}
-                                        aria-label={`Temporada seleccionada: ${selectedSeasonNumber}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowSeasonDropdown((v) => !v);
-                                            showControlsTemporarily();
-                                        }}
+                            <div className="akira-season-dd" ref={seasonDropdownRef}>
+                                <button
+                                    type="button"
+                                    className={`akira-season-dd-trigger ${showSeasonDropdown ? "open" : ""}`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={showSeasonDropdown}
+                                    aria-label={`Temporada seleccionada: ${selectedSeasonNumber}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowSeasonDropdown((v) => !v);
+                                        showControlsTemporarily();
+                                    }}
+                                >
+                                    <span>Temporada {selectedSeasonNumber}</span>
+                                    <span className="akira-season-dd-caret" aria-hidden="true">
+                                        ▾
+                                    </span>
+                                </button>
+
+                                {showSeasonDropdown && (
+                                    <div
+                                        className="akira-season-dd-menu"
+                                        role="menu"
+                                        aria-label="Seleccionar temporada"
+                                        onClick={(e) => e.stopPropagation()}
                                     >
-                                        <span>Temporada {selectedSeasonNumber}</span>
-                                        <span className="akira-season-dd-caret" aria-hidden="true">
-                                            ▾
-                                        </span>
-                                    </button>
+                                        {seasonDropdownOptions.map((s) => {
+                                            const active = s === selectedSeasonNumber;
 
-                                    {showSeasonDropdown && (
-                                        <div
-                                            className="akira-season-dd-menu"
-                                            role="menu"
-                                            aria-label="Seleccionar temporada"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {seasonDropdownOptions.map((s) => {
-                                                const active = s === selectedSeasonNumber;
-
-                                                return (
-                                                    <button
-                                                        key={s}
-                                                        type="button"
-                                                        role="menuitemradio"
-                                                        aria-checked={active}
-                                                        className={`akira-season-dd-item ${active ? "active" : ""}`}
-                                                        onClick={() => {
-                                                            setSelectedSeasonNumber(s);
-                                                            setShowSeasonDropdown(false);
-                                                            showControlsTemporarily();
-                                                        }}
-                                                    >
-                                                        <span className="akira-season-dd-item-text">Temporada {s}</span>
-                                                        {active && (
-                                                            <span className="akira-season-dd-check" aria-hidden="true" />
-                                                        )}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    type="button"
+                                                    role="menuitemradio"
+                                                    aria-checked={active}
+                                                    className={`akira-season-dd-item ${active ? "active" : ""}`}
+                                                    onClick={() => {
+                                                        setSelectedSeasonNumber(s);
+                                                        setShowSeasonDropdown(false);
+                                                        showControlsTemporarily();
+                                                    }}
+                                                >
+                                                    <span className="akira-season-dd-item-text">Temporada {s}</span>
+                                                    {active && (
+                                                        <span className="akira-season-dd-check" aria-hidden="true" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <button
@@ -2782,46 +2655,38 @@ export function AkiraPlayer({
                     </div>
 
                     <div className="akira-modal-body">
-                        {isEpisodesModalPreparing || isCollectionPreparing ? (
+                        {isEpisodesModalPreparing ? (
                             <div className="akira-empty-state">
-                                {isCollectionContext ? "Cargando colección..." : "Cargando episodios..."}
+                                Cargando episodios...
                             </div>
-                        ) : modalItems.length === 0 ? (
+                        ) : episodes.length === 0 ? (
                             <div className="akira-empty-state">
-                                {isCollectionContext
-                                    ? "No hay contenido cargado en esta colección."
-                                    : "No hay episodios cargados todavía."}
+                                No hay episodios cargados todavía.
                             </div>
                         ) : episodesForSelectedSeason.length === 0 ? (
                             <div className="akira-empty-state">
-                                {isCollectionContext
-                                    ? "No hay contenido cargado en esta colección."
-                                    : `No hay episodios cargados para la temporada ${selectedSeasonNumber}.`}
+                                No hay episodios cargados para la temporada {selectedSeasonNumber}.
                             </div>
                         ) : (
                             <div className="akira-episode-list">
                                 {episodesForSelectedSeason.map((ep) => {
-                                    const isCurrent = isCollectionContext
-                                        ? ep.id === contentId
-                                        : !!episodeId && ep.id === episodeId;
+                                    const isCurrent = !!episodeId && ep.id === episodeId;
 
                                     const seasonNum = getEpisodeSeasonNumberValue(ep);
                                     const episodeNum = getEpisodeNumberValue(ep);
                                     const episodeSynopsis = getEpisodeSynopsisValue(ep);
 
                                     const epLabel =
-                                        isCollectionContext
-                                            ? "Colección"
-                                            : seasonNum != null && episodeNum != null
-                                                ? `T${seasonNum} · E${episodeNum}`
-                                                : episodeNum != null
-                                                    ? `E${episodeNum}`
-                                                    : "Episodio";
+                                        seasonNum != null && episodeNum != null
+                                            ? `T${seasonNum} · E${episodeNum}`
+                                            : episodeNum != null
+                                                ? `E${episodeNum}`
+                                                : "Episodio";
 
                                     const episodeThumb = getEpisodeThumbSrc(ep, episodeThumbsMap[ep.id]);
 
                                     const epProgress = episodeProgressMap[ep.id];
-                                    const showEpisodeProgress = !isCollectionContext && !!epProgress?.hasProgress;
+                                    const showEpisodeProgress = !!epProgress?.hasProgress;
 
                                     return (
                                         <button
@@ -2913,6 +2778,7 @@ export function AkiraPlayer({
                 </div>
             )}
 
+            {/* Panel recomendado */}
             {showRecommendations && !onOpenRecommendations && (
                 <div
                     className="akira-modal akira-modal-reco"
@@ -2982,6 +2848,7 @@ export function AkiraPlayer({
                 </div>
             )}
 
+            {/* BOTTOM CONTROLS */}
             <div
                 className="akira-controls"
                 onMouseEnter={() => setControlsVisible(true)}
@@ -3060,7 +2927,8 @@ export function AkiraPlayer({
                     </span>
                 </div>
 
-                {episodeNavOverlay && !isCollectionContext && (
+                {/* ✅ Overlay global prev/next episode (fuera de center cluster) */}
+                {episodeNavOverlay && (
                     <div
                         className={`akira-episode-step-overlay-layer ${episodeNavOverlay.direction === "prev" ? "is-prev" : "is-next"
                             }`}
@@ -3099,20 +2967,20 @@ export function AkiraPlayer({
                                     e.stopPropagation();
                                     void openEpisodesPanel();
                                 }}
-                                title={episodesButtonLabel}
-                                aria-label={episodesButtonLabel}
-                                disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible || isCollectionPreparing}
+                                title="Episodios"
+                                aria-label="Episodios"
+                                disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
                             >
-                                {isEpisodesModalPreparing || isCollectionPreparing ? "Cargando..." : episodesButtonLabel}
+                                {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
                                 {hasEpisodes ? (
-                                    <span className="akira-text-btn-count">{modalItems.length}</span>
+                                    <span className="akira-text-btn-count">{episodes.length}</span>
                                 ) : null}
                             </button>
                         )}
                     </div>
 
                     <div className="akira-center-cluster">
-                        {isSeriesContext && !isCollectionContext && (
+                        {isSeriesContext && (
                             <div
                                 className="akira-episode-step-wrap is-prev"
                                 onMouseEnter={() => showEpisodeStepHover(prevEpisodeInPlaylist, "prev")}
@@ -3155,7 +3023,7 @@ export function AkiraPlayer({
                             size="xl"
                         />
 
-                        {isSeriesContext && !isCollectionContext && (
+                        {isSeriesContext && (
                             <div
                                 className="akira-episode-step-wrap is-next"
                                 onMouseEnter={() => showEpisodeStepHover(nextEpisodeInPlaylist, "next")}
