@@ -96,6 +96,11 @@ type Props = {
 
     /** ✅ Playlist mode: al terminar, reproduce el siguiente episodio */
     playlistMode?: boolean;
+
+    /** ✅ NUEVO: contexto colección */
+    isCollectionMode?: boolean;
+    collectionLabel?: string;
+    collectionId?: string | null;
 };
 
 type EpisodeProgressInfo = {
@@ -146,6 +151,8 @@ type ProgressRowLike = {
     movie_id?: string | null;
     episode_id_db?: string | null;
 };
+
+type PlaybackContext = "movie" | "series" | "collection";
 
 /**
  * ✅ IDs de public.movies.id que deben usar object-fit: contain
@@ -363,6 +370,26 @@ function isStrictEpisodeProgressRowMatch(params: {
     return true;
 }
 
+function isCollectionProgressRowMatch(params: {
+    row: ProgressRowLike | null | undefined;
+    contentId: string;
+    seasonId?: string | null;
+}): boolean {
+    const { row, contentId, seasonId } = params;
+    if (!row) return false;
+
+    const meta = readProgressRowMeta(row);
+
+    if (meta.contentId != null && meta.contentId !== String(contentId)) return false;
+    if (meta.episodeId != null && String(meta.episodeId).trim() !== "") return false;
+
+    if (seasonId != null && meta.seasonId != null && String(seasonId) !== String(meta.seasonId)) {
+        return false;
+    }
+
+    return true;
+}
+
 function isVideoElementPlaybackReady(video: HTMLVideoElement | null | undefined): boolean {
     if (!video) return false;
     const hasSource = Boolean(video.currentSrc || video.getAttribute("src"));
@@ -375,8 +402,17 @@ async function loadEpisodesProgressReal(params: {
     contentId: string;
     seasonId?: string | null;
     episodes: EpisodeItem[];
+    isCollectionMode?: boolean;
+    collectionId?: string | null;
 }): Promise<Record<string, EpisodeProgressInfo>> {
-    const { contentId, seasonId, episodes } = params;
+    const {
+        contentId,
+        seasonId,
+        episodes,
+        isCollectionMode = false,
+        collectionId = null
+    } = params;
+
     const map: Record<string, EpisodeProgressInfo> = {};
 
     if (!contentId || !episodes.length) return map;
@@ -385,39 +421,64 @@ async function loadEpisodesProgressReal(params: {
         episodes.map(async (ep): Promise<[string, EpisodeProgressInfo]> => {
             let row: any = null;
 
-            const seasonCandidates = Array.from(
-                new Set<(string | null)>([ep.seasonId ?? null, seasonId ?? null, null])
-            );
-
-            for (const sId of seasonCandidates) {
-                let candidate: any = null;
+            if (isCollectionMode) {
+                const collectionSeasonId = collectionId ?? seasonId ?? null;
 
                 try {
-                    candidate = await loadProgress({
-                        contentId,
-                        seasonId: sId,
-                        episodeId: ep.id
+                    const candidate = await loadProgress({
+                        contentId: ep.id,
+                        seasonId: collectionSeasonId,
+                        episodeId: null
                     });
+
+                    if (
+                        candidate &&
+                        isCollectionProgressRowMatch({
+                            row: candidate,
+                            contentId: ep.id,
+                            seasonId: collectionSeasonId
+                        })
+                    ) {
+                        row = candidate;
+                    }
                 } catch {
-                    candidate = null;
+                    row = null;
                 }
+            } else {
+                const seasonCandidates = Array.from(
+                    new Set<(string | null)>([ep.seasonId ?? null, seasonId ?? null, null])
+                );
 
-                if (!candidate) continue;
+                for (const sId of seasonCandidates) {
+                    let candidate: any = null;
 
-                if (
-                    !isStrictEpisodeProgressRowMatch({
-                        row: candidate,
-                        contentId,
-                        episodeId: ep.id,
-                        seasonId: ep.seasonId ?? sId ?? null,
-                        requireEpisodeId: true
-                    })
-                ) {
-                    continue;
+                    try {
+                        candidate = await loadProgress({
+                            contentId,
+                            seasonId: sId,
+                            episodeId: ep.id
+                        });
+                    } catch {
+                        candidate = null;
+                    }
+
+                    if (!candidate) continue;
+
+                    if (
+                        !isStrictEpisodeProgressRowMatch({
+                            row: candidate,
+                            contentId,
+                            episodeId: ep.id,
+                            seasonId: ep.seasonId ?? sId ?? null,
+                            requireEpisodeId: true
+                        })
+                    ) {
+                        continue;
+                    }
+
+                    row = candidate;
+                    break;
                 }
-
-                row = candidate;
-                break;
             }
 
             const positionSeconds = Number((row as any)?.position_seconds || 0);
@@ -569,7 +630,10 @@ export function AkiraPlayer({
     onSelectRecommendation,
     onSelectEpisode,
     recommendationsLabel = "Te podría gustar",
-    playlistMode = true
+    playlistMode = true,
+    isCollectionMode = false,
+    collectionLabel = "Colección",
+    collectionId = null
 }: Props) {
     void channelLabel;
 
@@ -725,27 +789,35 @@ export function AkiraPlayer({
         setShowSeasonDropdown(false);
     };
 
-    const currentEpisodeData = useMemo(() => {
-        if (!episodeId) return null;
-        return episodes.find((ep) => ep.id === episodeId) ?? null;
-    }, [episodes, episodeId]);
+    const playbackContext = useMemo<PlaybackContext>(() => {
+        if (isCollectionMode) return "collection";
 
-    const isSeriesContext = useMemo(() => {
-        if (contentCategoryFromDb === "series") return true;
-        if (contentCategoryFromDb === "movie") return false;
+        if (contentCategoryFromDb === "series") return "series";
+        if (contentCategoryFromDb === "movie") return "movie";
 
         if (typeof window !== "undefined") {
             try {
                 const sp = new URLSearchParams(window.location.search);
-                if (sp.has("series")) return true;
-                if (sp.has("movie")) return false;
+                if (sp.has("collection")) return "collection";
+                if (sp.has("series")) return "series";
+                if (sp.has("movie")) return "movie";
             } catch {
                 // noop
             }
         }
 
-        return Boolean(episodeId);
-    }, [contentCategoryFromDb, episodeId]);
+        if (episodeId) return "series";
+        return "movie";
+    }, [isCollectionMode, contentCategoryFromDb, episodeId]);
+
+    const isSeriesContext = playbackContext === "series";
+    const isCollectionContext = playbackContext === "collection";
+    const isEpisodicUiContext = isSeriesContext || isCollectionContext;
+
+    const currentEpisodeData = useMemo(() => {
+        if (!episodeId) return null;
+        return episodes.find((ep) => ep.id === episodeId) ?? null;
+    }, [episodes, episodeId]);
 
     const displayContentTitle = useMemo(() => {
         const dbTitle = (contentTitleFromDb || "").trim();
@@ -763,7 +835,13 @@ export function AkiraPlayer({
     }, [src]);
 
     const topMetaEpisodeLine = useMemo(() => {
+        if (isCollectionContext) {
+            const epTitle = currentEpisodeData?.title?.trim() || "";
+            return epTitle ? `${collectionLabel} · ${epTitle}` : collectionLabel;
+        }
+
         if (!isSeriesContext) return "";
+
         const s = getEpisodeSeasonNumberValue(currentEpisodeData) ?? (selectedSeasonNumber || undefined);
         const e = getEpisodeNumberValue(currentEpisodeData);
         const epTitle = currentEpisodeData?.title?.trim() || "";
@@ -772,13 +850,19 @@ export function AkiraPlayer({
         if (s != null && epTitle) return `Temporada ${s} · ${epTitle}`;
         if (epTitle) return epTitle;
         return "";
-    }, [isSeriesContext, currentEpisodeData, selectedSeasonNumber]);
+    }, [
+        isCollectionContext,
+        isSeriesContext,
+        currentEpisodeData,
+        selectedSeasonNumber,
+        collectionLabel
+    ]);
 
     const orderedEpisodes = useMemo(() => {
         return [...episodes].sort((a, b) => {
             const sa = getEpisodeSeasonNumberValue(a) ?? 1;
             const sb = getEpisodeSeasonNumberValue(b) ?? 1;
-            if (sa !== sb) return sa - sb;
+            if (!isCollectionContext && sa !== sb) return sa - sb;
 
             const ea = getEpisodeNumberValue(a) ?? 0;
             const eb = getEpisodeNumberValue(b) ?? 0;
@@ -786,7 +870,7 @@ export function AkiraPlayer({
 
             return String(a.id).localeCompare(String(b.id));
         });
-    }, [episodes]);
+    }, [episodes, isCollectionContext]);
 
     const currentEpisodeIndexInPlaylist = useMemo(() => {
         if (!episodeId) return -1;
@@ -804,8 +888,25 @@ export function AkiraPlayer({
     }, [orderedEpisodes, currentEpisodeIndexInPlaylist]);
 
     const effectiveSeasonIdForCurrentEpisode = useMemo(() => {
+        if (isCollectionContext) return collectionId ?? seasonId ?? null;
         return currentEpisodeData?.seasonId ?? seasonId ?? null;
-    }, [currentEpisodeData, seasonId]);
+    }, [isCollectionContext, collectionId, currentEpisodeData, seasonId]);
+
+    const effectiveProgressEpisodeId = useMemo(() => {
+        if (isCollectionContext) return null;
+        return episodeId ?? null;
+    }, [isCollectionContext, episodeId]);
+
+    const effectiveProgressSeasonId = useMemo(() => {
+        if (isCollectionContext) return collectionId ?? seasonId ?? null;
+        return effectiveSeasonIdForCurrentEpisode;
+    }, [isCollectionContext, collectionId, seasonId, effectiveSeasonIdForCurrentEpisode]);
+
+    const episodesButtonLabel = isCollectionContext ? collectionLabel : "Episodios";
+
+    const episodesModalTitle = isCollectionContext
+        ? `${displayContentTitle} · ${collectionLabel}`
+        : `${displayContentTitle} · Listado de episodios`;
 
     const episodesModalDataSignature = useMemo(() => {
         const compact = episodes.map((ep) => [
@@ -819,9 +920,11 @@ export function AkiraPlayer({
         return JSON.stringify({
             contentId: String(contentId || ""),
             seasonId: seasonId ?? null,
+            collectionId: collectionId ?? null,
+            isCollectionMode,
             episodes: compact
         });
-    }, [contentId, seasonId, episodes]);
+    }, [contentId, seasonId, collectionId, isCollectionMode, episodes]);
 
     const playbackHandshakeKey = useMemo(() => {
         return JSON.stringify({
@@ -860,7 +963,9 @@ export function AkiraPlayer({
                     loadEpisodesProgressReal({
                         contentId,
                         seasonId,
-                        episodes
+                        episodes,
+                        isCollectionMode,
+                        collectionId
                     }),
                     loadEpisodeThumbsFromSupabase({ episodes })
                 ]);
@@ -880,7 +985,7 @@ export function AkiraPlayer({
                 }
             }
         },
-        [contentId, seasonId, episodes, episodesModalDataSignature]
+        [contentId, seasonId, episodes, episodesModalDataSignature, isCollectionMode, collectionId]
     );
 
     const isPreparingOverlayVisibleInDom = useCallback((): boolean => {
@@ -1052,6 +1157,10 @@ export function AkiraPlayer({
         const episodeNum = getEpisodeNumberValue(episodeNavOverlay.episode);
         const overlaySynopsis = getEpisodeSynopsisValue(episodeNavOverlay.episode);
 
+        const overlayTitle = isCollectionContext
+            ? `${collectionLabel}${episodeNum != null ? ` · ${episodeNum}` : ""} ${episodeNavOverlay.episode.title ?? ""}`.trim()
+            : `T${seasonNum ?? "?"}E${episodeNum ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim();
+
         return (
             <div className={`akira-episode-step-popover ${episodeNavOverlay.visible ? "show" : ""}`} aria-hidden="true">
                 <div className="akira-episode-nav-thumb">
@@ -1064,11 +1173,13 @@ export function AkiraPlayer({
 
                 <div className="akira-episode-nav-body">
                     <div className="akira-episode-nav-kicker">
-                        {direction === "next" ? "Episodio siguiente" : "Episodio anterior"}
+                        {direction === "next"
+                            ? (isCollectionContext ? "Película siguiente" : "Episodio siguiente")
+                            : (isCollectionContext ? "Película anterior" : "Episodio anterior")}
                     </div>
 
                     <div className="akira-episode-nav-title" title={episodeNavOverlay.episode.title}>
-                        {`T${seasonNum ?? "?"}E${episodeNum ?? "?"} ${episodeNavOverlay.episode.title ?? ""}`.trim()}
+                        {overlayTitle}
                     </div>
 
                     {overlaySynopsis ? (
@@ -1690,7 +1801,7 @@ export function AkiraPlayer({
 
             if (
                 playlistMode &&
-                isSeriesContext &&
+                isEpisodicUiContext &&
                 nextEpisodeInPlaylist &&
                 onSelectEpisode
             ) {
@@ -1749,7 +1860,7 @@ export function AkiraPlayer({
     }, [
         autoplay,
         playlistMode,
-        isSeriesContext,
+        isEpisodicUiContext,
         nextEpisodeInPlaylist,
         onSelectEpisode,
         isPlayerBootReady,
@@ -1875,7 +1986,7 @@ export function AkiraPlayer({
         return () => document.removeEventListener("fullscreenchange", onFsChange);
     }, []);
 
-    // Continue Watching (load episodio actual)
+    // Continue Watching (load episodio actual / movie actual / collection actual)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -1898,8 +2009,8 @@ export function AkiraPlayer({
         (async () => {
             const row = await loadProgress({
                 contentId,
-                seasonId: effectiveSeasonIdForCurrentEpisode,
-                episodeId
+                seasonId: effectiveProgressSeasonId,
+                episodeId: effectiveProgressEpisodeId
             });
 
             if (cancelled || !row) {
@@ -1913,8 +2024,21 @@ export function AkiraPlayer({
                         row,
                         contentId,
                         episodeId,
-                        seasonId: effectiveSeasonIdForCurrentEpisode,
+                        seasonId: effectiveProgressSeasonId,
                         requireEpisodeId: true
+                    })
+                ) {
+                    restoredRef.current = true;
+                    return;
+                }
+            }
+
+            if (isCollectionContext) {
+                if (
+                    !isCollectionProgressRowMatch({
+                        row,
+                        contentId,
+                        seasonId: effectiveProgressSeasonId
                     })
                 ) {
                     restoredRef.current = true;
@@ -1949,9 +2073,11 @@ export function AkiraPlayer({
     }, [
         duration,
         contentId,
-        effectiveSeasonIdForCurrentEpisode,
+        effectiveProgressSeasonId,
+        effectiveProgressEpisodeId,
         episodeId,
         isSeriesContext,
+        isCollectionContext,
         isPlayerBootReady,
         isLiveMode
     ]);
@@ -1975,8 +2101,8 @@ export function AkiraPlayer({
 
             void saveProgress({
                 contentId,
-                seasonId: effectiveSeasonIdForCurrentEpisode,
-                episodeId,
+                seasonId: effectiveProgressSeasonId,
+                episodeId: effectiveProgressEpisodeId,
                 positionSeconds: v.currentTime || 0,
                 durationSeconds: total
             });
@@ -1984,7 +2110,15 @@ export function AkiraPlayer({
 
         v.addEventListener("timeupdate", onTimeUpdateSave);
         return () => v.removeEventListener("timeupdate", onTimeUpdateSave);
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
+    }, [
+        contentId,
+        effectiveProgressSeasonId,
+        effectiveProgressEpisodeId,
+        episodeId,
+        isSeriesContext,
+        isPlayerBootReady,
+        isLiveMode
+    ]);
 
     // Continue Watching (flush)
     useEffect(() => {
@@ -2001,8 +2135,8 @@ export function AkiraPlayer({
 
             void saveProgress({
                 contentId,
-                seasonId: effectiveSeasonIdForCurrentEpisode,
-                episodeId,
+                seasonId: effectiveProgressSeasonId,
+                episodeId: effectiveProgressEpisodeId,
                 positionSeconds: v.currentTime || 0,
                 durationSeconds: total
             });
@@ -2021,7 +2155,15 @@ export function AkiraPlayer({
             window.removeEventListener("beforeunload", flush);
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
-    }, [contentId, effectiveSeasonIdForCurrentEpisode, episodeId, isSeriesContext, isPlayerBootReady, isLiveMode]);
+    }, [
+        contentId,
+        effectiveProgressSeasonId,
+        effectiveProgressEpisodeId,
+        episodeId,
+        isSeriesContext,
+        isPlayerBootReady,
+        isLiveMode
+    ]);
 
     // ✅ Fallback: si el modal ya está abierto y cambia la data, rehidratar
     useEffect(() => {
@@ -2227,6 +2369,8 @@ export function AkiraPlayer({
 
     /** ✅ Detecta temporadas reales desde episodes (seasonNumber | season) */
     const seasonDropdownOptions = useMemo(() => {
+        if (isCollectionContext) return [1];
+
         const seasons = Array.from(
             new Set(
                 episodes
@@ -2236,7 +2380,7 @@ export function AkiraPlayer({
         ).sort((a, b) => a - b);
 
         return seasons.length ? seasons : [1];
-    }, [episodes]);
+    }, [episodes, isCollectionContext]);
 
     /** ✅ Si cambian episodios/temporadas, mantiene una temporada válida seleccionada */
     useEffect(() => {
@@ -2248,11 +2392,20 @@ export function AkiraPlayer({
     }, [seasonDropdownOptions]);
 
     const episodesForSelectedSeason = useMemo(() => {
+        if (isCollectionContext) {
+            return [...episodes].sort((a, b) => {
+                const ea = getEpisodeNumberValue(a) ?? 0;
+                const eb = getEpisodeNumberValue(b) ?? 0;
+                if (ea !== eb) return ea - eb;
+                return String(a.id).localeCompare(String(b.id));
+            });
+        }
+
         return episodes.filter((ep) => {
             const epSeason = getEpisodeSeasonNumberValue(ep) ?? 1;
             return epSeason === selectedSeasonNumber;
         });
-    }, [episodes, selectedSeasonNumber]);
+    }, [episodes, selectedSeasonNumber, isCollectionContext]);
 
     // Controls actions
     const togglePlay = () => {
@@ -2371,7 +2524,7 @@ export function AkiraPlayer({
         const currentEpisode = episodeId ? episodes.find((ep) => ep.id === episodeId) : null;
         const currentSeason = getEpisodeSeasonNumberValue(currentEpisode);
 
-        setSelectedSeasonNumber(currentSeason ?? seasonDropdownOptions[0] ?? 1);
+        setSelectedSeasonNumber(isCollectionContext ? 1 : (currentSeason ?? seasonDropdownOptions[0] ?? 1));
         setShowSeasonDropdown(false);
 
         try {
@@ -2516,7 +2669,7 @@ export function AkiraPlayer({
                     <div className="akira-top-meta" aria-live="polite">
                         <div className="akira-title">{displayContentTitle}</div>
 
-                        {isSeriesContext && topMetaEpisodeLine ? (
+                        {isEpisodicUiContext && topMetaEpisodeLine ? (
                             <div
                                 className="akira-channel"
                                 style={{
@@ -2562,13 +2715,13 @@ export function AkiraPlayer({
                 />
             )}
 
-            {/* Modal Episodios */}
+            {/* Modal Episodios / Colección */}
             {showEpisodes && (
                 <div
                     className="akira-modal"
                     role="dialog"
                     aria-modal="true"
-                    aria-label="Episodios"
+                    aria-label={episodesButtonLabel}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="akira-modal-header">
@@ -2582,61 +2735,63 @@ export function AkiraPlayer({
                             }}
                         >
                             <div className="akira-modal-title">
-                                {displayContentTitle} · Listado de episodios
+                                {episodesModalTitle}
                             </div>
 
-                            <div className="akira-season-dd" ref={seasonDropdownRef}>
-                                <button
-                                    type="button"
-                                    className={`akira-season-dd-trigger ${showSeasonDropdown ? "open" : ""}`}
-                                    aria-haspopup="menu"
-                                    aria-expanded={showSeasonDropdown}
-                                    aria-label={`Temporada seleccionada: ${selectedSeasonNumber}`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowSeasonDropdown((v) => !v);
-                                        showControlsTemporarily();
-                                    }}
-                                >
-                                    <span>Temporada {selectedSeasonNumber}</span>
-                                    <span className="akira-season-dd-caret" aria-hidden="true">
-                                        ▾
-                                    </span>
-                                </button>
-
-                                {showSeasonDropdown && (
-                                    <div
-                                        className="akira-season-dd-menu"
-                                        role="menu"
-                                        aria-label="Seleccionar temporada"
-                                        onClick={(e) => e.stopPropagation()}
+                            {!isCollectionContext && (
+                                <div className="akira-season-dd" ref={seasonDropdownRef}>
+                                    <button
+                                        type="button"
+                                        className={`akira-season-dd-trigger ${showSeasonDropdown ? "open" : ""}`}
+                                        aria-haspopup="menu"
+                                        aria-expanded={showSeasonDropdown}
+                                        aria-label={`Temporada seleccionada: ${selectedSeasonNumber}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowSeasonDropdown((v) => !v);
+                                            showControlsTemporarily();
+                                        }}
                                     >
-                                        {seasonDropdownOptions.map((s) => {
-                                            const active = s === selectedSeasonNumber;
+                                        <span>Temporada {selectedSeasonNumber}</span>
+                                        <span className="akira-season-dd-caret" aria-hidden="true">
+                                            ▾
+                                        </span>
+                                    </button>
 
-                                            return (
-                                                <button
-                                                    key={s}
-                                                    type="button"
-                                                    role="menuitemradio"
-                                                    aria-checked={active}
-                                                    className={`akira-season-dd-item ${active ? "active" : ""}`}
-                                                    onClick={() => {
-                                                        setSelectedSeasonNumber(s);
-                                                        setShowSeasonDropdown(false);
-                                                        showControlsTemporarily();
-                                                    }}
-                                                >
-                                                    <span className="akira-season-dd-item-text">Temporada {s}</span>
-                                                    {active && (
-                                                        <span className="akira-season-dd-check" aria-hidden="true" />
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
+                                    {showSeasonDropdown && (
+                                        <div
+                                            className="akira-season-dd-menu"
+                                            role="menu"
+                                            aria-label="Seleccionar temporada"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {seasonDropdownOptions.map((s) => {
+                                                const active = s === selectedSeasonNumber;
+
+                                                return (
+                                                    <button
+                                                        key={s}
+                                                        type="button"
+                                                        role="menuitemradio"
+                                                        aria-checked={active}
+                                                        className={`akira-season-dd-item ${active ? "active" : ""}`}
+                                                        onClick={() => {
+                                                            setSelectedSeasonNumber(s);
+                                                            setShowSeasonDropdown(false);
+                                                            showControlsTemporarily();
+                                                        }}
+                                                    >
+                                                        <span className="akira-season-dd-item-text">Temporada {s}</span>
+                                                        {active && (
+                                                            <span className="akira-season-dd-check" aria-hidden="true" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <button
@@ -2657,15 +2812,19 @@ export function AkiraPlayer({
                     <div className="akira-modal-body">
                         {isEpisodesModalPreparing ? (
                             <div className="akira-empty-state">
-                                Cargando episodios...
+                                {isCollectionContext ? "Cargando colección..." : "Cargando episodios..."}
                             </div>
                         ) : episodes.length === 0 ? (
                             <div className="akira-empty-state">
-                                No hay episodios cargados todavía.
+                                {isCollectionContext
+                                    ? "No hay películas cargadas en esta colección."
+                                    : "No hay episodios cargados todavía."}
                             </div>
                         ) : episodesForSelectedSeason.length === 0 ? (
                             <div className="akira-empty-state">
-                                No hay episodios cargados para la temporada {selectedSeasonNumber}.
+                                {isCollectionContext
+                                    ? "No hay películas cargadas en esta colección."
+                                    : `No hay episodios cargados para la temporada ${selectedSeasonNumber}.`}
                             </div>
                         ) : (
                             <div className="akira-episode-list">
@@ -2676,8 +2835,11 @@ export function AkiraPlayer({
                                     const episodeNum = getEpisodeNumberValue(ep);
                                     const episodeSynopsis = getEpisodeSynopsisValue(ep);
 
-                                    const epLabel =
-                                        seasonNum != null && episodeNum != null
+                                    const epLabel = isCollectionContext
+                                        ? episodeNum != null
+                                            ? `${collectionLabel} · ${episodeNum}`
+                                            : collectionLabel
+                                        : seasonNum != null && episodeNum != null
                                             ? `T${seasonNum} · E${episodeNum}`
                                             : episodeNum != null
                                                 ? `E${episodeNum}`
@@ -2721,7 +2883,7 @@ export function AkiraPlayer({
                                                         className="akira-episode-thumb-progress"
                                                         aria-label={
                                                             epProgress.completed
-                                                                ? "Episodio visto"
+                                                                ? (isCollectionContext ? "Película vista" : "Episodio visto")
                                                                 : `Progreso ${Math.round(epProgress.percent)}%`
                                                         }
                                                         title={
@@ -2743,7 +2905,7 @@ export function AkiraPlayer({
                                                     <div className="akira-episode-title">{ep.title}</div>
                                                     {isCurrent && (
                                                         <span className="akira-episode-current-pill">
-                                                            Reproduciendo
+                                                            {isCollectionContext ? "Viendo ahora" : "Reproduciendo"}
                                                         </span>
                                                     )}
                                                 </div>
@@ -2959,7 +3121,7 @@ export function AkiraPlayer({
                             ) : null}
                         </button>
 
-                        {isSeriesContext && (
+                        {isEpisodicUiContext && (
                             <button
                                 type="button"
                                 className="akira-text-btn"
@@ -2967,11 +3129,11 @@ export function AkiraPlayer({
                                     e.stopPropagation();
                                     void openEpisodesPanel();
                                 }}
-                                title="Episodios"
-                                aria-label="Episodios"
+                                title={episodesButtonLabel}
+                                aria-label={episodesButtonLabel}
                                 disabled={!hasEpisodes || isEpisodesModalPreparing || isPreparingUiVisible}
                             >
-                                {isEpisodesModalPreparing ? "Cargando..." : "Episodios"}
+                                {isEpisodesModalPreparing ? "Cargando..." : episodesButtonLabel}
                                 {hasEpisodes ? (
                                     <span className="akira-text-btn-count">{episodes.length}</span>
                                 ) : null}
@@ -2980,7 +3142,7 @@ export function AkiraPlayer({
                     </div>
 
                     <div className="akira-center-cluster">
-                        {isSeriesContext && (
+                        {isEpisodicUiContext && (
                             <div
                                 className="akira-episode-step-wrap is-prev"
                                 onMouseEnter={() => showEpisodeStepHover(prevEpisodeInPlaylist, "prev")}
@@ -2991,7 +3153,7 @@ export function AkiraPlayer({
                                 <IconButton
                                     onClick={goPrevEpisode}
                                     icon={ICONS.previous}
-                                    label="Episodio anterior"
+                                    label={isCollectionContext ? "Película anterior" : "Episodio anterior"}
                                     size="lg"
                                     disabled={!prevEpisodeInPlaylist || !onSelectEpisode}
                                     className="episodeStepBtn"
@@ -3023,7 +3185,7 @@ export function AkiraPlayer({
                             size="xl"
                         />
 
-                        {isSeriesContext && (
+                        {isEpisodicUiContext && (
                             <div
                                 className="akira-episode-step-wrap is-next"
                                 onMouseEnter={() => showEpisodeStepHover(nextEpisodeInPlaylist, "next")}
@@ -3034,7 +3196,7 @@ export function AkiraPlayer({
                                 <IconButton
                                     onClick={goNextEpisode}
                                     icon={ICONS.next}
-                                    label="Episodio siguiente"
+                                    label={isCollectionContext ? "Película siguiente" : "Episodio siguiente"}
                                     size="lg"
                                     disabled={!nextEpisodeInPlaylist || !onSelectEpisode}
                                     className="episodeStepBtn"
